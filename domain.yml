@@ -1,0 +1,310 @@
+version: "3.1"
+
+intents:
+  - greet
+  - goodbye
+  - affirm
+  - deny
+  - ask_order_status
+  - reset_password
+  - refund_policy
+  - talk_to_human
+  - faq
+  - report_damaged_product
+  - nlu_fallback
+  - urgent_contact
+  - start_return
+  - cancel_order
+  - update_address
+  - shipping_times
+  - store_hours
+  - chitchat
+  - no_order_id
+entities:
+  - order_id
+  - email
+  - new_address
+  - return_reason
+  - confirm_cancel
+  - sentiment
+  - top_emotion
+
+slots:
+  overall_emotion:
+    type: text
+    influence_conversation: false
+    mappings: [{ type: custom }]
+  emotion_tally:
+    type: any        # stores a dict {emotion: count}
+    influence_conversation: false
+    mappings: [{ type: custom }]
+  sentiment:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: from_entity
+        entity: sentiment
+  top_emotion:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: from_entity
+        entity: top_emotion
+  order_id:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: from_text
+        conditions:
+          - active_loop: order_status_form
+            requested_slot: order_id
+          - active_loop: return_form
+            requested_slot: order_id
+          - active_loop: cancel_order_form
+            requested_slot: order_id
+          - active_loop: address_update_form
+            requested_slot: order_id
+          - active_loop: damage_report_form
+            requested_slot: order_id
+
+  reuse_ok:
+    type: categorical
+    values: ["yes", "no"]
+    influence_conversation: false
+    mappings:
+      # let the form ask it; we validate yes/no from text or buttons
+      - type: from_text
+        conditions:
+          - active_loop: confirm_reuse_address_form
+            requested_slot: reuse_ok
+          - active_loop: confirm_reuse_damage_form
+            requested_slot: reuse_ok
+  email:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: from_entity
+        entity: email
+      - type: from_text
+        conditions:
+          - active_loop: password_reset_form
+            requested_slot: email
+  lookup_email:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: from_text
+        conditions:
+          - active_loop: order_lookup_by_email_form
+            requested_slot: lookup_email
+  new_address:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: from_text
+        conditions:
+          - active_loop: address_update_form
+            requested_slot: new_address
+  confirm_cancel:
+    type: bool
+    influence_conversation: true
+    mappings:
+      - type: from_intent
+        value: true
+        intent: affirm
+        conditions:
+          - active_loop: cancel_order_form
+            requested_slot: confirm_cancel
+      - type: from_intent
+        value: false
+        intent: deny
+        conditions:
+          - active_loop: cancel_order_form
+            requested_slot: confirm_cancel
+  return_reason:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: from_text
+        conditions:
+          - active_loop: return_form
+            requested_slot: return_reason
+  last_soft_affirmation_ts:
+    type: text
+    mappings:
+      - type: from_entity
+        entity: last_soft_affirmation_ts   # harmless, never set by NLU
+  issue_description: 
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: from_text
+        conditions:
+          - active_loop: damage_report_form
+            requested_slot: issue_description
+responses:
+  # Main Conversation Responses
+  utter_ack_positive_feedback:
+    - text: "Awesome to hear that! 🎉 Is there anything else I can help you with?"
+  utter_ack_negative_feedback:
+    - text: "Sorry to hear that. I can help you fix this—what would you like to do next?"
+  utter_show_empathy:
+    - text: "I’m sorry this has been frustrating. I’m here to help fix it."
+  utter_ask_more_help:
+    - text: "Is there anything else I can help you with?"
+  utter_ask_lookup_email:
+    - text: "No problem—what email did you use for the order?"
+  utter_ask_reuse_ok:
+    - text: "Is this about the same order {order_id}?"
+      buttons:
+        - title: "Yes, same order"
+          payload: "yes"
+        - title: "No, different order"
+          payload: "no"
+  utter_ask_anything_else:
+    - text: "Is there anything else you'd like me to help you with?"
+  utter_welcome_menu:
+    - text: "Choose an option to get started:"
+      buttons:
+        - title: "Track my order"
+          payload: "/ask_order_status"
+        - title: "Reset password"
+          payload: "/reset_password"
+        - title: "Start a return"
+          payload: "/start_return"
+        - title: "Update shipping address"
+          payload: "/update_address"
+        - title: "Cancel order"
+          payload: "/cancel_order"
+        - title: "Report damaged item"
+          payload: "/report_damaged_product"
+        - title: "Talk to a human"
+          payload: "/talk_to_human"
+  utter_greet:
+    - text: "Hello! How can I help you today?"
+  utter_goodbye:
+    - text: "Glad I could help. Have a great day!"
+  utter_handoff_ack:
+    - text: "Okay, I will connect you to a human agent now."
+  utter_ack_damage:
+    - text: "I'm sorry about that. I'll help you with a damage report."
+
+  # Prompts (Forms)
+  utter_ask_order_id:
+    - text: "Sure — what is your order ID? (e.g., ORD-12345)"
+      buttons:
+        - title: "I don't have it"
+          payload: "/no_order_id"
+  utter_ask_email:
+    - text: "What email did you use for the account?"
+      buttons:
+        - title: "Use a different email"
+          payload: "/deny"
+  utter_ask_issue_description:
+    - text: "Please describe the damage (e.g., broken screen, dented corner)."
+  utter_ask_new_address:
+    - text: "What is the new shipping address (full address including city & ZIP)?"
+  utter_ask_return_reason:
+    - text: "Please tell me the return reason (e.g., changed mind, damaged, wrong item)."
+  utter_ask_confirm_cancel:
+    - text: "Are you sure you want to cancel this order?"
+      buttons:
+        - title: "Yes, cancel it"
+          payload: "/affirm"
+        - title: "No, keep it"
+          payload: "/deny"
+
+  # Validation Errors
+  utter_order_id_invalid:
+    - text: "That doesn't look like a valid order ID (e.g., ORD-12345). Could you recheck it?"
+  utter_email_invalid:
+    - text: "That email looks invalid. Please enter a valid address."
+
+  # Fallback
+  utter_default:
+    - text: "I didn't quite get that. Could you rephrase or choose an option below?"
+      buttons:
+        - title: "Track my order"
+          payload: "/ask_order_status"
+        - title: "Reset password"
+          payload: "/reset_password"
+        - title: "Refund policy"
+          payload: "/refund_policy"
+        - title: "Talk to a human"
+          payload: "/talk_to_human"
+
+  # FAQs (Retrieval Intents & Generic FAQ)
+  utter_faq: # <-- ADDED: Generic FAQ fallback
+    - text: "I can help with store hours, shipping times, or the refund policy. What information do you need?"
+  utter_faq_refund_window: # <-- RENAMED from 'utter_faq/refund_window'
+    - text: "You can request a refund within 14 days for unopened items. Do you want the full policy link?"
+  utter_faq_contact_channels: # Renamed for consistency
+    - text: "We are available via chat (09:00-18:00 EET), email support@company.com, or phone +357-XXXX."
+  utter_store_hours:
+    - text: "Support is available Mon–Fri 09:00–18:00 EET."
+  utter_shipping_times:
+    - text: "Standard shipping is 3–5 business days after dispatch; Express is 1–2 days where available."
+
+  # Chitchat
+  utter_chitchat/ask_howareyou:
+    - text: "Doing great! How can I help you with your order or account?"
+  utter_chitchat/thanks:
+    - text: "You're welcome! Anything else I can help with?"
+  utter_chitchat/ask_name:
+    - text: "I’m your customer service assistant."
+  utter_oos_generic:
+    - text: "That's outside my area of expertise. I specialize in helping you with orders, accounts, and support issues"
+
+  utter_oos_personal_condolences:
+    - text: "I’m really sorry for your loss. 💙 If there’s anything I can do for your order or account today, I’m here to help."
+
+  # Optional: if someone expresses severe distress / crisis (you can trigger this later)
+  utter_crisis_help:
+    - text: "I’m really sorry you’re going through this. If you might be in danger or considering self-harm, please seek immediate help from local emergency services or a trusted person. I can also help with your order whenever you’re ready."
+
+actions:
+  - action_infer_emotion
+  - action_lookup_order_status
+  - action_password_reset
+  - action_record_damage_ticket
+  - action_clear_context
+  - action_request_handoff
+  - validate_order_status_form
+  - validate_return_form
+  - action_start_return
+  - action_cancel_order
+  - action_update_address
+  - validate_cancel_order_form
+  - validate_address_update_form
+  - validate_password_reset_form
+  - validate_damage_report_form   
+  - validate_order_lookup_by_email_form
+  - action_lookup_order_status_by_email
+  - action_soft_affirmation
+  - validate_confirm_reuse_address_form
+  - validate_confirm_reuse_damage_form
+  - action_after_reuse_confirm
+
+forms:
+  confirm_reuse_address_form:
+    required_slots: [reuse_ok]
+  confirm_reuse_damage_form:
+    required_slots: [reuse_ok]
+  order_lookup_by_email_form:
+    required_slots: [lookup_email]
+  damage_report_form:
+    required_slots:
+      - order_id
+      - issue_description
+  order_status_form:
+    required_slots:
+      - order_id
+  password_reset_form:
+    required_slots:
+      - email
+  return_form:
+    required_slots: [order_id, return_reason]
+  cancel_order_form:
+    required_slots: [order_id, confirm_cancel]
+  address_update_form:
+    required_slots: [order_id, new_address]

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Customer Service Chatbot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>html,body,#webchat{height:100%;margin:0;font-family:system-ui,Arial,sans-serif}</style>
+</head>
+<body>
+  <div id="webchat"></div>
+
+  <script>
+    function boot() {
+      if (!window.WebChat || !window.WebChat.default) {
+        console.error("rasa-webchat not loaded");
+        return;
+      }
+      console.log("rasa-webchat loaded, mounting…");
+      window.WebChat.default(
+        {
+          selector: "#webchat",
+          initPayload: "/greet",
+          socketUrl: "http://127.0.0.1:5005",   // use 127.0.0.1 to avoid IPv6 oddities
+          socketPath: "/socket.io/",
+          title: "CS Bot",
+          subtitle: "Customer Service Chatbot",
+          showFullScreenButton: true,
+          showCloseButton: true,
+          params: { storage: "session" },
+	  socketOptions: { transports: ["polling"] }
+          // customData: { language: "en" },
+        },
+        null
+      );
+    }
+
+    // Try jsDelivr, then unpkg as fallback
+    (function loadWidget() {
+      const s1 = document.createElement("script");
+      s1.src = "https://cdn.jsdelivr.net/npm/rasa-webchat@1.0.1/lib/index.js";
+      s1.async = true;
+      s1.onload = boot;
+      s1.onerror = function() {
+        console.warn("jsDelivr failed, trying unpkg…");
+        const s2 = document.createElement("script");
+        s2.src = "https://unpkg.com/rasa-webchat@1.0.1/lib/index.js";
+        s2.async = true;
+        s2.onload = boot;
+        s2.onerror = () => console.error("Failed to load rasa-webchat from both CDNs");
+        document.head.appendChild(s2);
+      };
+      document.head.appendChild(s1);
+    })();
+  </script>
+</body>
+</html>
+

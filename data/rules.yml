@@ -1,0 +1,324 @@
+version: "3.1"
+
+rules:
+
+# --- Core Conversation Flow Rules ---
+
+- rule: Greet with menu
+  steps:
+    - intent: greet
+    - action: action_infer_emotion
+    - action: utter_greet
+    - action: utter_welcome_menu
+
+- rule: Goodbye
+  steps:
+    - intent: goodbye
+    - action: action_infer_emotion
+    - action: utter_goodbye
+# --- Simple Intent-Response Rules ---
+
+- rule: Respond to Shipping times
+  steps:
+    - intent: shipping_times
+    - action: action_infer_emotion
+    - action: utter_shipping_times
+
+- rule: Respond to Store hours
+  steps:
+    - intent: store_hours
+    - action: action_infer_emotion
+    - action: utter_store_hours
+
+- rule: Respond to Refund policy
+  steps:
+    - intent: refund_policy
+    - action: action_infer_emotion
+    - action: utter_faq_refund_window
+
+
+- rule: Handle generic FAQ intent
+  steps:
+    - intent: faq
+    - action: utter_faq
+
+# --- Handoff Rules ---
+
+- rule: Human handoff
+  steps:
+    - intent: talk_to_human
+    - action: action_infer_emotion
+    - action: action_request_handoff
+    - action: utter_handoff_ack
+
+- rule: Urgent goes to human
+  steps:
+    - intent: urgent_contact
+    - action: action_infer_emotion
+    - action: action_request_handoff
+    - action: utter_handoff_ack
+
+# --- Fallback and Uncertainty Rules (Consolidated) ---
+- rule: NLU fallback (soft)
+  steps:
+    - intent: nlu_fallback
+    - action: action_infer_emotion
+    - action: action_soft_affirmation
+
+- rule: Fallback confirmed
+  steps:
+    - action: action_soft_affirmation
+    - intent: affirm
+    - action: action_revert_fallback_events
+
+- rule: Fallback to email lookup if user doesn’t have order ID
+  condition:
+    - active_loop: return_form
+  steps:
+    - slot_was_set:
+        - order_id: null
+    - action: action_lookup_order_status_by_email
+- rule: Fallback rejected
+  steps:
+    - action: action_soft_affirmation
+    - intent: deny
+    - action: action_default_ask_rephrase
+
+# --- Form Activation Rules ---
+
+- rule: Activate order status form
+  steps:
+    - intent: ask_order_status
+    - action: action_infer_emotion
+    - action: order_status_form
+    - active_loop: order_status_form
+
+- rule: Activate order status form
+  steps:
+    - intent: ask_order_status
+    - action: action_infer_emotion
+    - action: order_status_form
+    - active_loop: order_status_form
+
+- rule: Activate damage report form
+  steps:
+    - intent: report_damaged_product
+    - action: action_infer_emotion
+    - action: action_clear_context
+    - action: utter_ack_damage
+    - action: damage_report_form
+    - active_loop: damage_report_form
+
+- rule: Activate cancel order form
+  steps:
+    - intent: cancel_order
+    - action: action_infer_emotion
+    - action: action_clear_context
+    - action: cancel_order_form
+    - active_loop: cancel_order_form
+
+# --- Form Submission Rules ---
+
+- rule: Submit order status form
+  condition:
+    - active_loop: order_status_form
+  steps:
+    - action: order_status_form
+    - active_loop: null
+    - action: action_lookup_order_status
+
+- rule: Submit password reset form
+  condition:
+    - active_loop: password_reset_form
+  steps:
+    - action: password_reset_form
+    - active_loop: null
+    - action: action_password_reset
+
+- rule: Submit return form
+  condition:
+    - active_loop: return_form
+  steps:
+    - action: return_form
+    - active_loop: null
+    - action: action_start_return
+
+- rule: Submit cancel order form
+  condition:
+    - active_loop: cancel_order_form
+  steps:
+    - action: cancel_order_form
+    - active_loop: null
+    - action: action_cancel_order
+
+- rule: Submit address update form
+  condition:
+    - active_loop: address_update_form
+  steps:
+    - action: address_update_form
+    - active_loop: null
+    - action: action_update_address
+- rule: Ask if user needs more help after a form
+  condition:
+    - active_loop: null
+  steps:
+    - action: utter_ask_anything_else
+# --- Form Interruption Rules (Examples) ---
+
+- rule: Interrupt form for human handoff
+  condition:
+    - active_loop: password_reset_form
+  steps:
+    - intent: talk_to_human
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_clear_context
+    - action: action_request_handoff
+    - action: utter_handoff_ack
+
+- rule: Interrupt reset form for order status
+  condition:
+    - active_loop: password_reset_form
+  steps:
+    - intent: ask_order_status
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_clear_context
+    - action: order_status_form
+    - active_loop: order_status_form
+
+- rule: Interrupt reset form for damage report
+  condition:
+    - active_loop: password_reset_form
+  steps:
+    - intent: report_damaged_product
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_clear_context
+    - action: utter_ack_damage
+    - action: damage_report_form
+    - active_loop: damage_report_form
+# While asking for order_id, allow switching to email lookup
+- rule: No order ID → look up by email
+  condition:
+    - active_loop: address_update_form
+  steps:
+    - intent: no_order_id
+    - action: action_infer_emotion
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_clear_context
+    - action: order_lookup_by_email_form
+    - active_loop: order_lookup_by_email_form
+
+- rule: Submit email lookup form
+  condition:
+    - active_loop: order_lookup_by_email_form
+  steps:
+    - action: order_lookup_by_email_form
+    - active_loop: null
+    - action: action_lookup_order_status_by_email
+- rule: Handle chitchat & show menu
+  steps:
+    - intent: chitchat
+    - action: action_infer_emotion
+    - action: utter_chitchat
+    - action: utter_welcome_menu
+- rule: Submit damage report
+  condition:
+    - active_loop: damage_report_form
+  steps:
+    - action: damage_report_form
+    - active_loop: null
+    - action: action_record_damage_ticket   # your custom submit action
+# ADDRESS UPDATE (has saved order)
+- rule: Address update with existing order → confirm reuse
+  condition:
+    - slot_was_set:
+        - order_id: true
+  steps:
+    - intent: update_address
+    - action: confirm_reuse_address_form
+    - active_loop: confirm_reuse_address_form
+
+- rule: Submit reuse confirm → address form
+  condition:
+    - active_loop: confirm_reuse_address_form
+  steps:
+    - action: confirm_reuse_address_form
+    - active_loop: null
+    - action: action_after_reuse_confirm
+    - action: address_update_form
+    - active_loop: address_update_form
+
+# ADDRESS UPDATE (no order saved yet) — keep your existing activation rule
+- rule: Address update (no saved order)
+  condition:
+    - slot_was_set:
+        - order_id: null
+  steps:
+    - intent: update_address
+    - action: action_infer_emotion
+    - action: action_clear_context
+    - action: address_update_form
+    - active_loop: address_update_form
+
+# DAMAGE (has saved order)
+- rule: Damage report with existing order → confirm reuse
+  condition:
+    - slot_was_set:
+        - order_id: true
+  steps:
+    - intent: report_damaged_product
+    - action: confirm_reuse_damage_form
+    - active_loop: confirm_reuse_damage_form
+
+- rule: Submit reuse confirm → damage form
+  condition:
+    - active_loop: confirm_reuse_damage_form
+  steps:
+    - action: confirm_reuse_damage_form
+    - active_loop: null
+    - action: action_after_reuse_confirm
+    - action: utter_ack_damage
+    - action: damage_report_form
+    - active_loop: damage_report_form
+
+# DAMAGE REPORT (no order saved yet) — keep your existing activation rule
+- rule: Start damage report (no saved order)
+  condition:
+    - slot_was_set:
+        - order_id: null
+  steps:
+    - intent: report_damaged_product
+    - action: action_infer_emotion
+    - action: action_clear_context
+    - action: utter_ack_damage
+    - action: damage_report_form
+    - active_loop: damage_report_form
+- rule: Positive product feedback
+  steps:
+    - intent: product_feedback_positive
+    - action: action_infer_emotion
+    - action: utter_ack_positive_feedback
+    - action: utter_welcome_menu
+
+- rule: Negative product feedback
+  steps:
+    - intent: product_feedback_negative
+    - action: action_infer_emotion
+    - action: utter_ack_negative_feedback
+    - action: utter_welcome_menu
+- rule: Handle out of scope (general)
+  steps:
+    - intent: out_of_scope_general
+    - action: action_infer_emotion
+    - action: utter_oos_generic
+    - action: utter_welcome_menu
+
+- rule: Handle out of scope (personal distress)
+  steps:
+    - intent: out_of_scope_personal_distress
+    - action: action_infer_emotion
+    - action: utter_oos_personal_condolences
+    - action: utter_welcome_menu

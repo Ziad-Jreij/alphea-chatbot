@@ -1,0 +1,118 @@
+version: "3.1"
+stories:
+
+# --- Basic Form Stories (Required for training loop behavior) ---
+
+- story: Order Status happy path
+  steps:
+    - intent: ask_order_status
+    - action: action_infer_emotion
+    - action: order_status_form
+    - active_loop: order_status_form
+    - slot_was_set:
+      - order_id: "ORD-12345"
+    - action: action_infer_emotion
+    - action: order_status_form
+    - active_loop: null
+    - action: action_lookup_order_status
+
+- story: Password Reset happy path
+  steps:
+    - intent: reset_password
+    - action: action_infer_emotion
+    - action: action_clear_context
+    - action: password_reset_form
+    - active_loop: password_reset_form
+    - slot_was_set:
+      - email: "test@example.com"
+    - action: password_reset_form
+    - active_loop: null
+    - action: action_password_reset
+
+- story: Report Damage happy path
+  steps:
+    - intent: report_damaged_product
+    - action: action_infer_emotion
+    - action: action_clear_context
+    - action: utter_ack_damage
+    - action: damage_report_form
+    - active_loop: damage_report_form
+    - slot_was_set:
+      - order_id: "ORD-54321"
+    - slot_was_set:
+      - issue_description: "broken screen"
+    - action: damage_report_form
+    - active_loop: null
+    - action: action_record_damage_ticket
+
+- story: Return happy path
+  steps:
+    - intent: start_return
+    - action: action_infer_emotion
+    - action: action_clear_context
+    - action: return_form
+    - active_loop: return_form
+    - slot_was_set:
+      - order_id: "ORD-88888"
+    - slot_was_set:
+      - return_reason: "changed mind"
+    - action: return_form
+    - active_loop: null
+    - action: action_start_return
+
+- story: Cancel Order happy path
+  steps:
+    - intent: cancel_order
+    - action: action_infer_emotion
+    - action: action_clear_context
+    - action: cancel_order_form
+    - active_loop: cancel_order_form
+    - slot_was_set:
+      - order_id: "ORD-00000"
+    - slot_was_set:
+      - confirm_cancel: true
+    - action: action_infer_emotion
+    - action: cancel_order_form
+    - active_loop: null
+    - action: action_cancel_order
+
+- story: Update Address happy path
+  steps:
+    - intent: update_address
+    - action: action_infer_emotion
+    - action: action_clear_context
+    - action: address_update_form
+    - active_loop: address_update_form
+    - slot_was_set:
+      - order_id: "ORD-11111"
+    - slot_was_set:
+      - new_address: "123 Main St, Anytown, 10001"
+    - action: address_update_form
+    - active_loop: null
+    - action: action_update_address
+
+# --- Interruption Stories (Not strictly required as they are covered by Rules, but good for coverage) ---
+
+- story: User cancels form (Address Update)
+  steps:
+    # (1) entry to address update must match the rule
+    - intent: update_address
+    - action: action_infer_emotion          # ← add this line
+    - action: action_clear_context
+    - action: address_update_form
+    - active_loop: address_update_form
+
+    # (2) during RETURN FORM, a user denies (must match the during-form rule)
+    - active_loop: return_form
+    - intent: deny
+    - action: action_infer_emotion          # ← add this line to match the rule
+    - action: return_form
+    - active_loop: return_form
+# --- Chitchat Stories (Only if you are using the Response Selector) ---
+- story: Chitchat greeting
+  steps:
+    - intent: chitchat
+    - action: action_infer_emotion        # ← add
+    - action: utter_chitchat
+    - action: utter_welcome_menu          # ← add to match the rule
+

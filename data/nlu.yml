@@ -1,0 +1,307 @@
+version: "3.1"
+nlu:
+- intent: greet
+  examples: |
+    - hi
+    - hello
+    - hey there
+    - good morning
+    - good evening
+    - hey bot
+
+- intent: goodbye
+  examples: |
+    - bye
+    - goodbye
+    - see you later
+    - talk to you later
+    - adios 
+    - see you 
+    - talk later
+- intent: affirm
+  examples: |
+    - yes
+    - yep
+    - correct
+    - that's right
+    - sure
+- intent: deny
+  examples: |
+    - no
+    - nope
+    - not really
+    - wrong
+    - absolutely not
+
+- intent: ask_order_status
+  examples: |
+    - where is my order [ORD-12345](order_id)?
+    - track order [ORD-98765](order_id)
+    - order status please
+    - can you check my order?
+    - what's the status of my order?
+    - check order [1234](order_id)
+    - can you track my parcel?
+    - order tracking
+    - check my order
+    - what is the status of my order?
+    - where is my package right now?
+    - is my order [998877](order_id) shipped yet?
+    - can you check on my order please?
+    - track my delivery
+    - how long until my items arrive?
+    - update on order [123-456](order_id)
+    - has my order been processed?
+    - tell me about the delivery of order [741852](order_id)
+    - is my item out for delivery?
+    - please check my order
+    - where is my stuff?
+    - where’s my order?
+    - where is my order
+    - can you track my order
+    - track my shipment
+    - check delivery status
+- intent: reset_password
+  examples: |
+    - I forgot my password
+    - reset my password
+    - help me recover my account
+    - my email is [alex@example.com](email)
+    - I need to change my password
+
+- intent: report_damaged_product
+  examples: |
+    - my product is damaged
+    - my order came defective
+    - item arrived faulty
+    - I want to report a damaged product
+    - I received a broken item
+    - the package arrived damaged
+    - product is faulty
+    - damaged delivery
+
+- intent: start_return
+  examples: |
+    - I want to return my order
+    - start a return
+    - request a refund
+    - return item
+    - how do I send something back?
+    - initiate a return
+    - I want to return an item.
+    - can I send back a product?
+    - I need to start a return
+    - how do I return my purchase?
+    - where do I go to return something?
+    - I would like to initiate a product return.
+    - start a return for order [12345678](order_id)
+    - I am unhappy and want to send my goods back.
+    - I need help with returning my order.
+    - begin the return procedure please
+    - let me return a product.
+    - I need to send back order [ORDER-ABCD](order_id)
+
+- intent: cancel_order
+  examples: |
+    - cancel my order
+    - can I cancel my order
+    - I want to stop this order
+    - please cancel order
+    - I need to stop the shipment
+
+- intent: update_address
+  examples: |
+    - change my shipping address
+    - update delivery address
+    - wrong address on my order
+    - I moved, update address
+    - need to change the delivery location
+
+- intent: talk_to_human
+  examples: |
+    - I need a human
+    - can I talk to an agent?
+    - escalate me to support
+    - get me a person
+    - connect me with a representative
+
+- intent: urgent_contact
+  examples: |
+    - this is urgent
+    - need immediate help
+    - very urgent
+    - escalate now
+    - critical problem
+
+# --- FAQ Intents (Standardized to use 'faq/' prefix) ---
+- intent: refund_policy
+  examples: |
+    - what's your refund policy?
+    - can I get a refund?
+    - return policy please
+    - what is your refund period?
+    - how long do I have to return?
+    - refund period
+    - what is your refund policy?
+    - tell me about refunds
+    - how long do I have to request a refund?
+    - what are the guidelines for getting my money back?
+    - is it possible to get a refund?
+    - what's the refund window?
+    - what are the terms for a refund?
+    - do you offer a money-back guarantee?
+    - can I get my payment reversed?
+    - what's the procedure for a refund?
+    - I need to know the official refund rules.
+    - what is the deadline to ask for a refund?
+
+- intent: shipping_times
+  examples: |
+    - how long does shipping take?
+    - when will my order arrive?
+    - delivery time estimate
+    - how long is shipping
+    - when will it arrive
+
+- intent: store_hours
+  examples: |
+    - what are your hours
+    - when are you open
+    - support hours
+    - what time does your support team start?
+
+- intent: faq/contact_channels
+  examples: |
+    - how can I contact support?
+    - do you have live chat?
+    - customer service phone?
+    - what are your contact channels?
+
+# --- Chitchat Intents (Duplicates Merged) ---
+- intent: chitchat/ask_howareyou
+  examples: |
+    - how are you
+    - how is it going
+    - how are you doing
+    - how are you doing today?
+    - how’s everything?
+    - how’s your day going?
+    - you good?
+    
+- intent: chitchat/thanks
+  examples: |
+    - thanks
+    - thank you
+    - appreciate it
+- intent: chitchat/ask_name
+  examples: |
+    - what is your name
+    - who are you
+    - what's your name
+    - are you a bot?
+    - are you human?
+    - who should I address you as?
+    - do you have a name?
+    - what do people call you?
+    - introduce yourself
+- intent: chitchat/ask_purpose
+  examples: |
+    - what can you help me with?
+    - what is your purpose?
+    - what do you do?
+    - tell me what you are for
+    - what are your capabilities?
+- intent: chitchat/ask_creator
+  examples: |
+    - who made you?
+    - who built you?
+    - who is your developer?
+    - where were you born?
+    - which company runs you?
+- intent: no_order_id
+  examples: |
+    - I don't have it
+    - I don’t have it
+    - I lost my order id
+    - I don't know my order id
+- intent: product_feedback_positive
+  examples: |
+    - I'm happy with my product
+    - I love my purchase
+    - everything works great
+    - very satisfied with the product
+    - it's perfect, thank you
+    - I would recommend this product
+    - excellent quality
+    - this product exceeded my expectations
+    - five stars, great product!
+    - couldn't be happier with it
+    - highly recommend this item
+- intent: product_feedback_negative
+  examples: |
+     - I'm unhappy with my product
+     - I'm disappointed with my purchase
+     - the product is bad
+     - it doesn't work as expected
+     - I'm not satisfied
+     - this is terrible quality
+     - total waste of money
+     - the item arrived broken
+     - I demand a refund for this junk
+     - worst purchase ever
+     - I have a major complaint about the product
+- intent: out_of_scope_general
+  examples: |
+     - tell me about quantum physics
+     - what's the meaning of life
+     - who won the game last night
+     - do you believe in aliens
+     - how to cook pasta
+     - what is 2 + 2
+     - what's the weather like in London?
+     - define the word 'ephemeral'
+     - is Pluto a planet or not?
+     - what time is it in Tokyo?
+     - what year did the Titanic sink?
+     - who is the CEO of Google?
+     - what is the largest mammal on Earth?
+
+- intent: out_of_scope_personal_distress
+  examples: |
+     - I lost my grandmother today
+     - my friend passed away
+     - I'm grieving right now
+     - I'm having a really hard day
+     - I feel heartbroken
+     - I'm so sad and confused
+     - I could really use someone to listen
+     - I'm feeling overwhelmed by life
+     - I just got some terrible news
+     - my pet is sick and I am devastated
+     - I'm having a family emergency
+     - I need emotional support
+     - today is very tough for me
+# --- RegEx and Lookup Tables ---
+- regex: order_id
+  examples: |
+    - ORD-\d{5}
+    - \d{5} # Added numeric-only ID pattern
+- regex: email
+  examples: |
+    - [^@]+@[^@]+\.[^@]+
+
+- lookup: product
+  examples: |
+    - premium plan
+    - basic plan
+    - family plan
+    - enterprise plan
+    - widget pro
+    - widget mini
+
+- synonym: refund
+  examples: |
+    - return
+    - money back
+    - reimbursement
+    - exchange
