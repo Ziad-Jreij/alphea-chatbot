@@ -1,1 +1,4 @@
-./models/*
+models/*
+.rasa/*
+.hf_cache/*
+.venv/*
