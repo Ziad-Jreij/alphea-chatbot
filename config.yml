@@ -23,16 +23,28 @@ pipeline:
   - name: FallbackClassifier
     threshold: 0.55
     ambiguity_threshold: 0.05
+
+  - name: components.emotion.EmotionClassifierComponent
+
+  - name: components.criticality.CriticalityZeroShotComponent
+    model_name: "facebook/bart-large-mnli"   
+    hypothesis_template: "This support request is {}."
+    labels: ["low urgency", "medium urgency", "high urgency"]
+    boost_from_emotion: true
+    heuristics_enabled: true
+    gpu: false     
+    cache: true    
+
 policies:
-- name: RulePolicy
-  core_fallback_threshold: 0.6
-  core_fallback_action_name: "action_default_fallback"
-  enable_fallback_prediction: true
-- name: MemoizationPolicy
-  max_history: 5
-- name: TEDPolicy
-  max_history: 5
-  epochs: 50
-  constrain_similarities: true
+  - name: RulePolicy
+    core_fallback_threshold: 0.6
+    core_fallback_action_name: "action_default_fallback"
+    enable_fallback_prediction: true
+  - name: MemoizationPolicy
+    max_history: 5
+  - name: TEDPolicy
+    max_history: 5
+    epochs: 50
+    constrain_similarities: true
 
 assistant_id: 20251018-162338-mean-crew

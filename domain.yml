@@ -28,6 +28,9 @@ entities:
   - confirm_cancel
   - sentiment
   - top_emotion
+  - criticality_level
+  - criticality_score
+  - escalation
 
 slots:
   overall_emotion:
@@ -35,21 +38,77 @@ slots:
     influence_conversation: false
     mappings: [{ type: custom }]
   emotion_tally:
-    type: any        # stores a dict {emotion: count}
+    type: any        
     influence_conversation: false
     mappings: [{ type: custom }]
   sentiment:
     type: text
     influence_conversation: true
-    mappings:
-      - type: from_entity
-        entity: sentiment
+    mappings: [{ type: custom }]
+  emotion_history:
+    type: list            
+    influence_conversation: false
+    mappings: [{ type: custom }]
   top_emotion:
     type: text
     influence_conversation: true
+    mappings: [{ type: custom }]
+  criticality_level:
+    type: categorical
+    values:
+      - low
+      - medium
+      - high
+    influence_conversation: true
     mappings:
       - type: from_entity
-        entity: top_emotion
+        entity: criticality_level
+
+  criticality_score:
+    type: float
+    influence_conversation: false
+    mappings:
+      - type: from_entity
+        entity: criticality_score
+  escalation:
+    type: categorical
+    values:
+      - none
+      - potential
+      - escalate_now
+    influence_conversation: true
+    mappings:
+      - type: from_entity
+        entity: escalation
+  criticality_history:
+    type: list
+    influence_conversation: false
+    mappings: [{ type: custom }]
+
+  criticality_tally:
+    type: any
+    influence_conversation: false
+    mappings: [{ type: custom }]
+
+  conversation_criticality:
+    type: categorical
+    values: ["low","medium","high"]
+    influence_conversation: true
+    mappings: [{ type: custom }]
+
+  conversation_criticality_score:
+    type: float
+    influence_conversation: false
+    mappings: [{ type: custom }]
+    
+  conversation_escalation:
+    type: categorical
+    values:
+      - none
+      - potential
+      - escalate_now
+    influence_conversation: true
+    mappings: [{ type: custom }]
   order_id:
     type: text
     influence_conversation: true
@@ -256,12 +315,15 @@ responses:
     - text: "That's outside my area of expertise. I specialize in helping you with orders, accounts, and support issues"
 
   utter_oos_personal_condolences:
-    - text: "I’m really sorry for your loss. 💙 If there’s anything I can do for your order or account today, I’m here to help."
+    - text: "I’m really sorry. If there’s anything I can do for your order or account today, I’m here to help."
 
   # Optional: if someone expresses severe distress / crisis (you can trigger this later)
   utter_crisis_help:
     - text: "I’m really sorry you’re going through this. If you might be in danger or considering self-harm, please seek immediate help from local emergency services or a trusted person. I can also help with your order whenever you’re ready."
-
+  utter_acknowledge_critical_issue:
+    - text: "Got it. This seems serious. Let me secure help right away."
+  utter_escalation_banner:
+    - text: "I will connect you to a human agent now."
 actions:
   - action_infer_emotion
   - action_lookup_order_status
@@ -284,6 +346,9 @@ actions:
   - validate_confirm_reuse_address_form
   - validate_confirm_reuse_damage_form
   - action_after_reuse_confirm
+  - action_escalate_now
+  - action_offer_handoff
+  - action_update_conversation_risk
 
 forms:
   confirm_reuse_address_form:

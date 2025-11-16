@@ -9,6 +9,9 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification, Text
 import torch
 import logging
 from threading import Lock
+from components.emotion import ensure_emotion_pipe, coarse_from_label, top_emotion 
+from components.criticality import infer_criticality_for_text
+
 _init_lock = Lock()
 # Fake database for demo
 ORDER_DB = {
@@ -21,37 +24,13 @@ EMAIL_RE = re.compile(r"[^@]+@[^@]+\.[^@]+")
 
 logger = logging.getLogger(__name__)
 
-# ---- Load once (module-level cache) ----
-MODEL_NAME = "joeddav/distilbert-base-uncased-go-emotions-student"
-_tokenizer = None
-_model = None
-_pipe = None
-
-POS = {"admiration","amusement","approval","caring","gratitude","joy","love","optimism","pride","relief"}
-NEG = {"anger","annoyance","disappointment","disapproval","disgust","embarrassment","grief","fear","nervousness","remorse","sadness"}
-NEU = {"neutral"}
-
+_CRIT2SCORE = {"low": 0.2, "medium": 0.6, "high": 0.9}
+_SCORE2CRIT = lambda s: ("high" if s>=0.75 else "medium" if s>=0.45 else "low")
+_ESCALATION_MAP = {"low":"none","medium":"potential","high":"escalate_now"}
 def _coarse(emotion: str) -> str:
-    e = (emotion or "").lower()
-    if e in POS: return "positive"
-    if e in NEG: return "negative"
-    if e in NEU: return "neutral"
-    return "ambiguous"
-
-def _ensure_pipe():
-    global _tokenizer, _model, _pipe
-    if _pipe is None:
-        with _init_lock:
-            if _pipe is None:  # double-checked
-                device = 0 if torch.cuda.is_available() else -1
-                tok = AutoTokenizer.from_pretrained(MODEL_NAME)
-                mdl = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
-                _pipe = TextClassificationPipeline(
-                    model=mdl, tokenizer=tok, top_k=None, function_to_apply="sigmoid", device=device
-                )
-                # cache to globals after success
-                globals()["_tokenizer"], globals()["_model"] = tok, mdl
-    return _pipe
+    return coarse_from_label(emotion)
+def _ensure_pipe():  # keep your existing name to minimize diff
+    return ensure_emotion_pipe()
 def clear_context_slots() -> List[Dict[Text, Any]]:
     """Clear slots that shouldn't leak across flows."""
     return [SlotSet("order_id", None), SlotSet("email", None), SlotSet("issue_description", None)]
@@ -75,6 +54,38 @@ def _infer_emotion_slots(tracker):
         f"[form-emotion] text='{text}' -> top={top_label}, sentiment={sentiment}, overall={overall}"
     )
     return {"top_emotion": top_label, "sentiment": sentiment, **agg}
+def _infer_criticality_slots(text: str, emotion: str) -> Dict[Text, Any]:
+    text = (text or "").strip()
+    if not text:
+        return {}
+
+    result = infer_criticality_for_text(
+        text,
+        emotion,
+        # keywords default as per component
+    )
+
+    level = result["criticality_level"]
+    score = float(result["criticality_score"])
+    escalation = result["escalation"]
+    dist = result["distribution"]
+
+    logger.info(
+        "[crit] text=%r emo=%s -> level=%s score=%.2f escalation=%s dist=%s",
+        text,
+        (emotion or "none"),
+        level,
+        score,
+        escalation,
+        {k: f"{v:.2f}" for k, v in dist.items()},
+    )
+
+    return {
+        "criticality_level": level,
+        "criticality_score": score,
+        "escalation": escalation,
+    }
+
 def _best_overall_from_tally(tally: Dict[str, int], last_top: str) -> str:
     if not tally:
         return last_top or "neutral"
@@ -86,13 +97,16 @@ def _best_overall_from_tally(tally: Dict[str, int], last_top: str) -> str:
 def _merge_emotion_aggregate(tracker, new_label):
     tally = tracker.get_slot("emotion_tally") or {}
     history = tracker.get_slot("emotion_history") or []
+
+    tally[new_label] = tally.get(new_label, 0) + 1
+
     history.append(new_label)
-    if len(history) > 10:  # keep last 10 user turns only
+    if len(history) > 10:
         history.pop(0)
 
     weights = {}
     for i, e in enumerate(reversed(history)):
-        weights[e] = weights.get(e, 0) + (1 / (i + 1))  # recency weighting
+        weights[e] = weights.get(e, 0) + (1 / (i + 1))
 
     overall = max(weights.items(), key=lambda x: x[1])[0]
     return {
@@ -100,42 +114,168 @@ def _merge_emotion_aggregate(tracker, new_label):
         "emotion_history": history,
         "overall_emotion": overall,
     }
+class ActionUpdateConversationRisk(Action):
+    def name(self) -> str: 
+        return "action_update_conversation_risk"
+
+    def run(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        print("ACTION RISK UPDATE STARTED SUCCESSFULLY!")
+
+        # 1) TURN-LEVEL CRITICALITY via shared helper
+        text = (tracker.latest_message.get("text") or "").strip()
+        # use latest top_emotion if already set, but ActionInferEmotion can pass a fresher one;
+        # for now we can still fall back to the slot:
+        emo_for_prior = tracker.get_slot("top_emotion")
+        crit = _infer_criticality_slots(text, emo_for_prior)
+        level = (crit.get("criticality_level") or "low").lower()
+        score = float(crit.get("criticality_score") or _CRIT2SCORE.get(level, 0.2))
+        turn_escalation = crit.get("escalation") or _ESCALATION_MAP.get(level, "none")
+
+        # 2) HISTORY & TALLY (same as before)
+        history = list(tracker.get_slot("criticality_history") or [])
+        tally: Dict[str, int] = dict(tracker.get_slot("criticality_tally") or {})
+
+        history.append({"level": level, "score": score})
+        history = history[-15:]
+
+        tally[level] = tally.get(level, 0) + 1
+
+        # 3) CONVERSATION-LEVEL SCORE
+        w = 1.0
+        total_w = 0.0
+        agg = 0.0
+        for item in reversed(history):
+            agg += w * float(item["score"])
+            total_w += w
+            w *= 0.85
+        conv_score = agg / max(total_w, 1e-9)
+        conv_level = _SCORE2CRIT(conv_score)
+        conv_escalation = _ESCALATION_MAP[conv_level]
+
+        # guardrail: any high in history → force escalate_now
+        if any(h["level"] == "high" for h in history):
+            conv_escalation = "escalate_now"
+            conv_level = "high"
+            conv_score = max(conv_score, 0.9)
+
+        # 4) LOGGING
+        text = (tracker.latest_message.get("text") or "").strip()
+        emo = (tracker.get_slot("top_emotion") or "unknown")
+        sentiment = (tracker.get_slot("sentiment") or "ambiguous")
+
+        logger.info(
+            "[conv-risk] conv=%s text=%r emo=%s sentiment=%s | "
+            "turn_level=%s turn_score=%.2f turn_escalation=%s | "
+            "conv_level=%s conv_score=%.2f conv_escalation=%s history=%s",
+            tracker.sender_id,
+            text,
+            emo,
+            sentiment,
+            level,
+            score,
+            turn_escalation,
+            conv_level,
+            conv_score,
+            conv_escalation,
+            [h["level"] for h in history][-5:],
+        )
+
+        return [
+            # per-turn
+            SlotSet("criticality_level", level),
+            SlotSet("criticality_score", score),
+            SlotSet("escalation", turn_escalation),
+            # conversation-level
+            SlotSet("criticality_history", history),
+            SlotSet("criticality_tally", tally),
+            SlotSet("conversation_criticality", conv_level),
+            SlotSet("conversation_criticality_score", conv_score),
+            SlotSet("conversation_escalation", conv_escalation),
+        ]
+
+class ActionEscalateNow(Action):
+    def name(self) -> Text:
+        return "action_escalate_now"
+
+    def run(
+        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
+    ) -> List[Dict[Text, Any]]:
+        # Here you can create a ticket, ping a webhook, or notify a live queue
+        # Example message to the user:
+        dispatcher.utter_message(
+            text="I’m escalating this to a human specialist right now. You’ll be connected shortly."
+        )
+        # Add your integration here, e.g. requests.post(...)
+        return []
+
+class ActionOfferHandoff(Action):
+    def name(self) -> Text:
+        return "action_offer_handoff"
+
+    def run(
+        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
+    ) -> List[Dict[Text, Any]]:
+        # Gentle handoff prompt
+        dispatcher.utter_message(
+            text="This looks a bit urgent. Would you like me to bring a human agent into the chat?"
+        )
+        return []
 class ActionInferEmotion(Action):
     def name(self) -> Text:
         return "action_infer_emotion"
 
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[EventType]:
+    def run(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> List[EventType]:
         text = (tracker.latest_message.get("text") or "").strip()
         if not text:
             return []
 
         pipe = _ensure_pipe()
-        preds = pipe(text)[0]  # list of {"label","score"}
+        preds = pipe(text)[0]
         top = max(preds, key=lambda x: x["score"])
         top_label = top["label"]
         sentiment = _coarse(top_label)
 
-        # optional debug log setup
-        top3 = sorted(((p["label"], float(p["score"])) for p in preds), key=lambda x: x[1], reverse=True)[:3]
-        
-        agg = _merge_emotion_aggregate(tracker, top_label)
-        
-        # FIX: The indentation of the 'overall' line was likely the issue (a tab was used here).
-        # We ensure 12 spaces (3 levels) are used, consistent with the lines above.
-        overall = agg.get("overall_emotion") 
-        
-        # Log after all necessary variables are defined
-        logger.info(f"[emotion] text='{text}' -> top_emotion={top_label} sentiment={sentiment} top3={top3} overall={overall}")
+        top3 = sorted(
+            ((p["label"], float(p["score"])) for p in preds),
+            key=lambda x: x[1],
+            reverse=True,
+        )[:3]
 
-        # FIX: The indentation of the 'return' line was likely the issue.
-        # Ensure 12 spaces (3 levels) are used here.
-        return [
-            # The continuation lines here use 16 spaces (4 levels) for alignment.
+        agg = _merge_emotion_aggregate(tracker, top_label)
+        overall = agg.get("overall_emotion")
+
+        logger.info(
+            "[emotion] text=%r -> top_emotion=%s sentiment=%s top3=%s overall=%s",
+            text,
+            top_label,
+            sentiment,
+            top3,
+            overall,
+        )
+
+        events: List[EventType] = [
             SlotSet("top_emotion", top_label),
             SlotSet("sentiment", sentiment),
             SlotSet("emotion_tally", agg["emotion_tally"]),
-            SlotSet("overall_emotion", agg["overall_emotion"]),
+            SlotSet("overall_emotion", overall),
         ]
+
+        # Also update conversation risk (criticality + escalation)
+        risk_action = ActionUpdateConversationRisk()
+        risk_events = risk_action.run(dispatcher, tracker, domain)
+        events.extend(risk_events)
+
+        return events
 class ActionSoftAffirmation(Action):
     def name(self) -> str:
         return "action_soft_affirmation"
@@ -181,7 +321,7 @@ class ValidateDamageReportForm(FormValidationAction):
             return out
 
         v = normalize_order_id(value)
-        if ORDER_RE.fullmatch(v):
+        if v and ORDER_RE.fullmatch(v):
             out["order_id"] = v
             return out
 
@@ -463,6 +603,10 @@ class ActionAfterReuseConfirm(Action):
         else:
             dispatcher.utter_message(text="Great, I’ll use the same order.")
         return events
+def _latest_intent_name(tracker: Tracker) -> str | None:
+    latest = tracker.latest_message or {}
+    intent = latest.get("intent") or {}
+    return intent.get("name")
 def _reuse_ok_common(value: Text, tracker: Tracker, dispatcher: CollectingDispatcher) -> Dict[Text, Any]:
     v = (value or "").strip().lower()
     if v in {"yes", "y"}: return {"reuse_ok": "yes"}

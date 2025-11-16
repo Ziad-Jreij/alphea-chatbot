@@ -322,3 +322,34 @@ rules:
     - action: action_infer_emotion
     - action: utter_oos_personal_condolences
     - action: utter_welcome_menu
+- rule: Escalate now when high criticality
+  condition:
+    - slot_was_set:
+        - escalation: "escalate_now"
+  steps:
+    - action: action_escalate_now
+
+- rule: Offer human handoff when potential escalation
+  condition:
+    - slot_was_set:
+        - escalation: "potential"
+  steps:
+    - action: action_offer_handoff
+- rule: Update conversation risk after each classification
+  steps:
+    - slot_was_set:
+          - criticality_level
+    - action: action_update_conversation_risk
+- rule: Escalate now when conversation-level says so
+  condition:
+    - slot_was_set:
+        - conversation_escalation: escalate_now
+  steps:
+    - action: action_escalate_now
+
+- rule: Offer handoff when conversation-level is potential
+  condition:
+    - slot_was_set:
+        - conversation_escalation: potential
+  steps:
+    - action: action_offer_handoff
