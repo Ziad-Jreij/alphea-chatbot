@@ -7,6 +7,7 @@ stories:
   steps:
     - intent: ask_order_status
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: order_status_form
     - active_loop: order_status_form
     - slot_was_set:
@@ -20,6 +21,7 @@ stories:
   steps:
     - intent: reset_password
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: action_clear_context
     - action: password_reset_form
     - active_loop: password_reset_form
@@ -33,6 +35,7 @@ stories:
   steps:
     - intent: report_damaged_product
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: action_clear_context
     - action: utter_ack_damage
     - action: damage_report_form
@@ -49,6 +52,7 @@ stories:
   steps:
     - intent: start_return
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: action_clear_context
     - action: return_form
     - active_loop: return_form
@@ -64,6 +68,7 @@ stories:
   steps:
     - intent: cancel_order
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: action_clear_context
     - action: cancel_order_form
     - active_loop: cancel_order_form
@@ -80,6 +85,7 @@ stories:
   steps:
     - intent: update_address
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: action_clear_context
     - action: address_update_form
     - active_loop: address_update_form
@@ -97,7 +103,8 @@ stories:
   steps:
     # (1) entry to address update must match the rule
     - intent: update_address
-    - action: action_infer_emotion          # ← add this line
+    - action: action_infer_emotion   
+    - action: action_update_conversation_risk       # ← add this line
     - action: action_clear_context
     - action: address_update_form
     - active_loop: address_update_form
@@ -106,6 +113,7 @@ stories:
     - active_loop: return_form
     - intent: deny
     - action: action_infer_emotion          # ← add this line to match the rule
+    - action: action_update_conversation_risk
     - action: return_form
     - active_loop: return_form
 # --- Chitchat Stories (Only if you are using the Response Selector) ---
@@ -113,6 +121,7 @@ stories:
   steps:
     - intent: chitchat
     - action: action_infer_emotion        # ← add
+    - action: action_update_conversation_risk
     - action: utter_chitchat
     - action: utter_welcome_menu          # ← add to match the rule
 

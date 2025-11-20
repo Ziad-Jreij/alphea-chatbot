@@ -7,14 +7,14 @@ rules:
 - rule: Greet with menu
   steps:
     - intent: greet
-    - action: action_infer_emotion
+    # - action: action_infer_emotion
     - action: utter_greet
     - action: utter_welcome_menu
 
 - rule: Goodbye
   steps:
     - intent: goodbye
-    - action: action_infer_emotion
+    # - action: action_infer_emotion
     - action: utter_goodbye
 # --- Simple Intent-Response Rules ---
 
@@ -22,18 +22,21 @@ rules:
   steps:
     - intent: shipping_times
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: utter_shipping_times
 
 - rule: Respond to Store hours
   steps:
     - intent: store_hours
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: utter_store_hours
 
 - rule: Respond to Refund policy
   steps:
     - intent: refund_policy
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: utter_faq_refund_window
 
 
@@ -48,6 +51,7 @@ rules:
   steps:
     - intent: talk_to_human
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: action_request_handoff
     - action: utter_handoff_ack
 
@@ -55,6 +59,7 @@ rules:
   steps:
     - intent: urgent_contact
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: action_request_handoff
     - action: utter_handoff_ack
 
@@ -63,6 +68,7 @@ rules:
   steps:
     - intent: nlu_fallback
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: action_soft_affirmation
 
 - rule: Fallback confirmed
@@ -90,13 +96,7 @@ rules:
   steps:
     - intent: ask_order_status
     - action: action_infer_emotion
-    - action: order_status_form
-    - active_loop: order_status_form
-
-- rule: Activate order status form
-  steps:
-    - intent: ask_order_status
-    - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: order_status_form
     - active_loop: order_status_form
 
@@ -104,6 +104,7 @@ rules:
   steps:
     - intent: report_damaged_product
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: action_clear_context
     - action: utter_ack_damage
     - action: damage_report_form
@@ -113,6 +114,7 @@ rules:
   steps:
     - intent: cancel_order
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: action_clear_context
     - action: cancel_order_form
     - active_loop: cancel_order_form
@@ -205,6 +207,7 @@ rules:
   steps:
     - intent: no_order_id
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: action_deactivate_loop
     - active_loop: null
     - action: action_clear_context
@@ -222,6 +225,7 @@ rules:
   steps:
     - intent: chitchat
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: utter_chitchat
     - action: utter_welcome_menu
 - rule: Submit damage report
@@ -259,6 +263,7 @@ rules:
   steps:
     - intent: update_address
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: action_clear_context
     - action: address_update_form
     - active_loop: address_update_form
@@ -292,6 +297,7 @@ rules:
   steps:
     - intent: report_damaged_product
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: action_clear_context
     - action: utter_ack_damage
     - action: damage_report_form
@@ -300,6 +306,7 @@ rules:
   steps:
     - intent: product_feedback_positive
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: utter_ack_positive_feedback
     - action: utter_welcome_menu
 
@@ -307,12 +314,14 @@ rules:
   steps:
     - intent: product_feedback_negative
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: utter_ack_negative_feedback
     - action: utter_welcome_menu
 - rule: Handle out of scope (general)
   steps:
     - intent: out_of_scope_general
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: utter_oos_generic
     - action: utter_welcome_menu
 
@@ -320,6 +329,7 @@ rules:
   steps:
     - intent: out_of_scope_personal_distress
     - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: utter_oos_personal_condolences
     - action: utter_welcome_menu
 - rule: Escalate now when high criticality
@@ -335,11 +345,6 @@ rules:
         - escalation: "potential"
   steps:
     - action: action_offer_handoff
-- rule: Update conversation risk after each classification
-  steps:
-    - slot_was_set:
-          - criticality_level
-    - action: action_update_conversation_risk
 - rule: Escalate now when conversation-level says so
   condition:
     - slot_was_set:

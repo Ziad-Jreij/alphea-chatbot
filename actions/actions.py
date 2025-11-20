@@ -1,12 +1,10 @@
-from typing import Any, Text, Dict, List
+from typing import Any, Text, Dict, List, Optional
 from rasa_sdk import Action, Tracker, FormValidationAction
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.types import DomainDict
 import re
 from rasa_sdk.events import SlotSet, EventType
 from datetime import datetime, timedelta
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, TextClassificationPipeline
-import torch
 import logging
 from threading import Lock
 from components.emotion import ensure_emotion_pipe, coarse_from_label, top_emotion 
@@ -40,43 +38,89 @@ def normalize_order_id(s: str) -> Text | None:
         s = f"ORD-{s[3:]}"
     return s if ORDER_RE.fullmatch(s or "") else None
 def _infer_emotion_slots(tracker):
+    """Infer emotion (and now criticality) for the latest user message.
+
+    Used by validators so that every turn inside forms still updates:
+      - top_emotion / sentiment / overall_emotion
+      - criticality_level / criticality_score / escalation
+    """
     text = (tracker.latest_message.get("text") or "").strip()
     if not text:
         return {}
+
+    # 1) Emotion
     pipe = _ensure_pipe()
     preds = pipe(text)[0]
     top = max(preds, key=lambda x: x["score"])
     top_label = top["label"]
     sentiment = _coarse(top_label)
+
     agg = _merge_emotion_aggregate(tracker, top_label)
     overall = agg.get("overall_emotion")
+
+    # 2) Criticality (use emotion as prior for the model)
+    crit = _infer_criticality_slots(text, top_label)
+    level = crit["criticality_level"]
+    score = crit["criticality_score"]
+    escalation = crit["escalation"]
+
     logger.info(
-        f"[form-emotion] text='{text}' -> top={top_label}, sentiment={sentiment}, overall={overall}"
+        "[form-emotion+crit] text=%r -> emo=%s sentiment=%s overall=%s | "
+        "crit_level=%s crit_score=%.2f crit_escalation=%s",
+        text,
+        top_label,
+        sentiment,
+        overall,
+        level,
+        score,
+        escalation,
     )
-    return {"top_emotion": top_label, "sentiment": sentiment, **agg}
-def _infer_criticality_slots(text: str, emotion: str) -> Dict[Text, Any]:
+
+    return {
+        # emotion
+        "top_emotion": top_label,
+        "sentiment": sentiment,
+        "emotion_tally": agg["emotion_tally"],
+        "emotion_history": agg["emotion_history"],
+        "overall_emotion": overall,
+        # criticality
+        "criticality_level": level,
+        "criticality_score": score,
+        "escalation": escalation,
+    }
+def _infer_criticality_slots(text: str, emotion: Optional[str]) -> Dict[Text, Any]:
     text = (text or "").strip()
     if not text:
-        return {}
+        # safe default
+        return {
+            "criticality_level": "low",
+            "criticality_score": _CRIT2SCORE["low"],
+            "escalation": _ESCALATION_MAP["low"],
+        }
 
     result = infer_criticality_for_text(
         text,
         emotion,
-        # keywords default as per component
+        boost_from_emotion=True,   # or False if you decide to ignore emotion prior
+        heuristics_enabled=True,   # <-- this enables YAML keyword overrides
     )
 
-    level = result["criticality_level"]
-    score = float(result["criticality_score"])
-    escalation = result["escalation"]
-    dist = result["distribution"]
+    level = (result.get("criticality_level") or "low").lower()
+    score = float(result.get("criticality_score") or _CRIT2SCORE.get(level, 0.2))
+    escalation = result.get("escalation") or _ESCALATION_MAP.get(level, "none")
+    dist = result.get("distribution") or {}
+    source = result.get("source") or "unknown"
+    kw = result.get("matched_keyword")
 
-    logger.info(
-        "[crit] text=%r emo=%s -> level=%s score=%.2f escalation=%s dist=%s",
+    logger.debug(
+        "[crit] text=%r emo=%s -> level=%s score=%.2f escalation=%s source=%s kw=%s dist=%s",
         text,
         (emotion or "none"),
         level,
         score,
         escalation,
+        source,
+        kw,
         {k: f"{v:.2f}" for k, v in dist.items()},
     )
 
@@ -124,28 +168,27 @@ class ActionUpdateConversationRisk(Action):
         tracker: Tracker,
         domain: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
-        print("ACTION RISK UPDATE STARTED SUCCESSFULLY!")
-
         # 1) TURN-LEVEL CRITICALITY via shared helper
         text = (tracker.latest_message.get("text") or "").strip()
-        # use latest top_emotion if already set, but ActionInferEmotion can pass a fresher one;
-        # for now we can still fall back to the slot:
+        # we use latest top_emotion as prior for the model, but conv-risk
+        # itself only depends on criticality (history below)
         emo_for_prior = tracker.get_slot("top_emotion")
+
         crit = _infer_criticality_slots(text, emo_for_prior)
         level = (crit.get("criticality_level") or "low").lower()
         score = float(crit.get("criticality_score") or _CRIT2SCORE.get(level, 0.2))
         turn_escalation = crit.get("escalation") or _ESCALATION_MAP.get(level, "none")
 
-        # 2) HISTORY & TALLY (same as before)
+        # 2) HISTORY & TALLY
         history = list(tracker.get_slot("criticality_history") or [])
         tally: Dict[str, int] = dict(tracker.get_slot("criticality_tally") or {})
 
         history.append({"level": level, "score": score})
-        history = history[-15:]
+        history = history[-15:]  # keep last 15 turns
 
         tally[level] = tally.get(level, 0) + 1
 
-        # 3) CONVERSATION-LEVEL SCORE
+        # 3) CONVERSATION-LEVEL SCORE (decayed average)
         w = 1.0
         total_w = 0.0
         agg = 0.0
@@ -164,7 +207,6 @@ class ActionUpdateConversationRisk(Action):
             conv_score = max(conv_score, 0.9)
 
         # 4) LOGGING
-        text = (tracker.latest_message.get("text") or "").strip()
         emo = (tracker.get_slot("top_emotion") or "unknown")
         sentiment = (tracker.get_slot("sentiment") or "ambiguous")
 
@@ -267,13 +309,10 @@ class ActionInferEmotion(Action):
             SlotSet("top_emotion", top_label),
             SlotSet("sentiment", sentiment),
             SlotSet("emotion_tally", agg["emotion_tally"]),
+            SlotSet("emotion_history", agg["emotion_history"]),  # <-- add this
             SlotSet("overall_emotion", overall),
         ]
 
-        # Also update conversation risk (criticality + escalation)
-        risk_action = ActionUpdateConversationRisk()
-        risk_events = risk_action.run(dispatcher, tracker, domain)
-        events.extend(risk_events)
 
         return events
 class ActionSoftAffirmation(Action):
