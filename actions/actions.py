@@ -23,7 +23,7 @@ EMAIL_RE = re.compile(r"[^@]+@[^@]+\.[^@]+")
 logger = logging.getLogger(__name__)
 
 _CRIT2SCORE = {"low": 0.2, "medium": 0.6, "high": 0.9}
-_SCORE2CRIT = lambda s: ("high" if s>=0.75 else "medium" if s>=0.45 else "low")
+_SCORE2CRIT = lambda s: ("high" if s>=0.70 else "medium" if s>=0.5 else "low")
 _ESCALATION_MAP = {"low":"none","medium":"potential","high":"escalate_now"}
 def _coarse(emotion: str) -> str:
     return coarse_from_label(emotion)
@@ -38,11 +38,12 @@ def normalize_order_id(s: str) -> Text | None:
         s = f"ORD-{s[3:]}"
     return s if ORDER_RE.fullmatch(s or "") else None
 def _infer_emotion_slots(tracker):
-    """Infer emotion (and now criticality) for the latest user message.
+    """Infer emotion + criticality for the latest user message and update conv-risk.
 
     Used by validators so that every turn inside forms still updates:
       - top_emotion / sentiment / overall_emotion
       - criticality_level / criticality_score / escalation
+      - conversation_criticality / conversation_criticality_score / conversation_escalation
     """
     text = (tracker.latest_message.get("text") or "").strip()
     if not text:
@@ -61,12 +62,15 @@ def _infer_emotion_slots(tracker):
     # 2) Criticality (use emotion as prior for the model)
     crit = _infer_criticality_slots(text, top_label)
     level = crit["criticality_level"]
-    score = crit["criticality_score"]
+    score = float(crit["criticality_score"])
     escalation = crit["escalation"]
+
+    # 3) Conversation-level risk update (uses ONLY criticality)
+    conv_state = _update_conversation_risk(tracker, level, score)
 
     logger.info(
         "[form-emotion+crit] text=%r -> emo=%s sentiment=%s overall=%s | "
-        "crit_level=%s crit_score=%.2f crit_escalation=%s",
+        "crit_level=%s crit_score=%.2f crit_escalation=%s | conv=%s",
         text,
         top_label,
         sentiment,
@@ -74,20 +78,30 @@ def _infer_emotion_slots(tracker):
         level,
         score,
         escalation,
+        {
+            "conversation_criticality": conv_state["conversation_criticality"],
+            "conversation_criticality_score": conv_state["conversation_criticality_score"],
+            "conversation_escalation": conv_state["conversation_escalation"],
+        },
     )
 
-    return {
+    out = {
         # emotion
         "top_emotion": top_label,
         "sentiment": sentiment,
         "emotion_tally": agg["emotion_tally"],
         "emotion_history": agg["emotion_history"],
         "overall_emotion": overall,
-        # criticality
+        # per-turn criticality
         "criticality_level": level,
         "criticality_score": score,
         "escalation": escalation,
     }
+
+    # add conversation-level risk slots
+    out.update(conv_state)
+    return out
+
 def _infer_criticality_slots(text: str, emotion: Optional[str]) -> Dict[Text, Any]:
     text = (text or "").strip()
     if not text:
@@ -129,7 +143,74 @@ def _infer_criticality_slots(text: str, emotion: Optional[str]) -> Dict[Text, An
         "criticality_score": score,
         "escalation": escalation,
     }
+def _update_conversation_risk(
+    tracker: Tracker,
+    level: str,
+    score: float,
+) -> Dict[Text, Any]:
+    """Update conversation-level risk based on this turn's criticality.
 
+    Uses only criticality (level, score), not emotion, for the actual math.
+    Emotion is logged just for observability.
+    """
+
+    # 1) HISTORY & TALLY
+    history = list(tracker.get_slot("criticality_history") or [])
+    tally: Dict[str, int] = dict(tracker.get_slot("criticality_tally") or {})
+
+    history.append({"level": level, "score": float(score)})
+    history = history[-15:]  # keep last 15 turns
+
+    tally[level] = tally.get(level, 0) + 1
+
+    # 2) CONVERSATION-LEVEL SCORE (decayed)
+    w = 1.0
+    total_w = 0.0
+    agg = 0.0
+    for item in reversed(history):
+        s = float(item.get("score", 0.0))
+        agg += w * s
+        total_w += w
+        w *= 0.85  # decay
+
+    conv_score = agg / max(total_w, 1e-9)
+    conv_level = _SCORE2CRIT(conv_score)
+    conv_escalation = _ESCALATION_MAP[conv_level]
+
+    # 3) Guardrail: any high in history → force escalate_now
+    if any(h.get("level") == "high" for h in history):
+        conv_escalation = "escalate_now"
+        conv_level = "high"
+        conv_score = max(conv_score, 0.9)
+
+    # 4) LOGGING
+    text = (tracker.latest_message.get("text") or "").strip()
+    emo = (tracker.get_slot("top_emotion") or "unknown")
+    sentiment = (tracker.get_slot("sentiment") or "ambiguous")
+
+    logger.info(
+        "[conv-risk] conv=%s text=%r emo=%s sentiment=%s | "
+        "turn_level=%s turn_score=%.2f | "
+        "conv_level=%s conv_score=%.2f conv_escalation=%s history=%s",
+        tracker.sender_id,
+        text,
+        emo,
+        sentiment,
+        level,
+        float(score),
+        conv_level,
+        conv_score,
+        conv_escalation,
+        [h.get("level") for h in history][-5:],
+    )
+
+    return {
+        "criticality_history": history,
+        "criticality_tally": tally,
+        "conversation_criticality": conv_level,
+        "conversation_criticality_score": conv_score,
+        "conversation_escalation": conv_escalation,
+    }
 def _best_overall_from_tally(tally: Dict[str, int], last_top: str) -> str:
     if not tally:
         return last_top or "neutral"
@@ -168,10 +249,8 @@ class ActionUpdateConversationRisk(Action):
         tracker: Tracker,
         domain: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
-        # 1) TURN-LEVEL CRITICALITY via shared helper
+        # TURN-LEVEL CRITICALITY
         text = (tracker.latest_message.get("text") or "").strip()
-        # we use latest top_emotion as prior for the model, but conv-risk
-        # itself only depends on criticality (history below)
         emo_for_prior = tracker.get_slot("top_emotion")
 
         crit = _infer_criticality_slots(text, emo_for_prior)
@@ -179,67 +258,21 @@ class ActionUpdateConversationRisk(Action):
         score = float(crit.get("criticality_score") or _CRIT2SCORE.get(level, 0.2))
         turn_escalation = crit.get("escalation") or _ESCALATION_MAP.get(level, "none")
 
-        # 2) HISTORY & TALLY
-        history = list(tracker.get_slot("criticality_history") or [])
-        tally: Dict[str, int] = dict(tracker.get_slot("criticality_tally") or {})
+        # CONVERSATION-LEVEL RISK (shared helper)
+        conv_state = _update_conversation_risk(tracker, level, score)
 
-        history.append({"level": level, "score": score})
-        history = history[-15:]  # keep last 15 turns
-
-        tally[level] = tally.get(level, 0) + 1
-
-        # 3) CONVERSATION-LEVEL SCORE (decayed average)
-        w = 1.0
-        total_w = 0.0
-        agg = 0.0
-        for item in reversed(history):
-            agg += w * float(item["score"])
-            total_w += w
-            w *= 0.85
-        conv_score = agg / max(total_w, 1e-9)
-        conv_level = _SCORE2CRIT(conv_score)
-        conv_escalation = _ESCALATION_MAP[conv_level]
-
-        # guardrail: any high in history → force escalate_now
-        if any(h["level"] == "high" for h in history):
-            conv_escalation = "escalate_now"
-            conv_level = "high"
-            conv_score = max(conv_score, 0.9)
-
-        # 4) LOGGING
-        emo = (tracker.get_slot("top_emotion") or "unknown")
-        sentiment = (tracker.get_slot("sentiment") or "ambiguous")
-
-        logger.info(
-            "[conv-risk] conv=%s text=%r emo=%s sentiment=%s | "
-            "turn_level=%s turn_score=%.2f turn_escalation=%s | "
-            "conv_level=%s conv_score=%.2f conv_escalation=%s history=%s",
-            tracker.sender_id,
-            text,
-            emo,
-            sentiment,
-            level,
-            score,
-            turn_escalation,
-            conv_level,
-            conv_score,
-            conv_escalation,
-            [h["level"] for h in history][-5:],
-        )
-
-        return [
+        events: List[EventType] = [
             # per-turn
             SlotSet("criticality_level", level),
             SlotSet("criticality_score", score),
             SlotSet("escalation", turn_escalation),
-            # conversation-level
-            SlotSet("criticality_history", history),
-            SlotSet("criticality_tally", tally),
-            SlotSet("conversation_criticality", conv_level),
-            SlotSet("conversation_criticality_score", conv_score),
-            SlotSet("conversation_escalation", conv_escalation),
         ]
 
+        # conversation-level slots
+        for k, v in conv_state.items():
+            events.append(SlotSet(k, v))
+
+        return events
 class ActionEscalateNow(Action):
     def name(self) -> Text:
         return "action_escalate_now"
@@ -570,32 +603,47 @@ class ValidateReturnForm(FormValidationAction):
         """
         Validates the order ID during the return form.
         Handles: valid IDs, reuse of previous ID, and "I don't have it".
+        Also updates emotion + conv-risk for this turn.
         """
+        out = _infer_emotion_slots(tracker)  # ← emotion + criticality + conv-risk
+
+        # If this slot is not actively requested, just keep the current value
+        if tracker.get_slot("requested_slot") != "order_id":
+            out["order_id"] = tracker.get_slot("order_id")
+            return out
+
         if not value:
-            # if user didn’t provide a value, try to reuse previous
             previous_id = tracker.get_slot("order_id")
             if previous_id:
                 dispatcher.utter_message(text=f"Got it — we’ll use your previous order ID ({previous_id}).")
-                return {"order_id": previous_id}
+                out["order_id"] = previous_id
+                return out
             else:
                 dispatcher.utter_message(text="No worries, kindly provide your order ID (e.g., ORD-12345).")
-                return {"order_id": None, "lookup_email": None}
+                out["order_id"] = None
+                out["lookup_email"] = None
+                return out
 
         text = value.strip().lower()
 
-        # Handle the case where user says "I don't have it"
+        # "I don't have it" → fallback to email
         if "don't have" in text or "do not have" in text:
             dispatcher.utter_message(text="No worries — let’s find your order by email instead.")
-            return {"order_id": None, "lookup_email": None}
+            out["order_id"] = None
+            out["lookup_email"] = None
+            return out
 
-        # Check if valid format (e.g., ORD-12345)
+        # Valid ID format
         if re.match(r"^ord-\d{5}$", text, re.IGNORECASE):
             order_id = text.upper()
-            return {"order_id": order_id}
+            out["order_id"] = order_id
+            return out
 
         # Invalid format fallback
         dispatcher.utter_message(text="That doesn’t look like a valid order ID (e.g., ORD-12345). Could you recheck it?")
-        return {"order_id": None}
+        out["order_id"] = None
+        return out
+
 
 class ValidateCancelOrderForm(FormValidationAction):
     def name(self) -> Text:
@@ -624,11 +672,31 @@ class ValidateOrderLookupByEmailForm(FormValidationAction):
     def name(self) -> Text:
         return "validate_order_lookup_by_email_form"
 
-    def validate_lookup_email(self, value: Text, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict):
-        if value and EMAIL_RE.match(value.strip()):
-            return {"lookup_email": value.strip()}
+    def validate_lookup_email(
+        self,
+        value: Text,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+
+        # Always update emotion + criticality + conv-risk
+        out = _infer_emotion_slots(tracker)
+
+        # If not actively asking for this slot → keep old value
+        if tracker.get_slot("requested_slot") != "lookup_email":
+            out["lookup_email"] = tracker.get_slot("lookup_email")
+            return out
+
+        # Validate email
+        if value and EMAIL_RE.fullmatch(value.strip()):
+            out["lookup_email"] = value.strip()
+            return out
+
         dispatcher.utter_message(response="utter_email_invalid")
-        return {"lookup_email": None}
+        out["lookup_email"] = None
+        return out
+
 class ActionAfterReuseConfirm(Action):
     def name(self) -> Text:
         return "action_after_reuse_confirm"
@@ -660,16 +728,87 @@ class ValidateConfirmReuseAddressForm(FormValidationAction):
     def name(self) -> str:
         return "validate_confirm_reuse_address_form"
 
-    def validate_reuse_ok(self, value, dispatcher, tracker, domain):
-        return _reuse_ok_common(value, tracker, dispatcher)
+    def validate_reuse_ok(
+        self,
+        value: Text,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+
+        # Always update emotion + criticality + conv-risk
+        out = _infer_emotion_slots(tracker)
+
+        # If not the active slot, just keep its current value
+        if tracker.get_slot("requested_slot") != "reuse_ok":
+            out["reuse_ok"] = tracker.get_slot("reuse_ok")
+            return out
+
+        # Reuse existing logic
+        v = (value or "").strip().lower()
+        if v in {"yes", "y"}:
+            out["reuse_ok"] = "yes"
+            return out
+        if v in {"no", "n"}:
+            out["reuse_ok"] = "no"
+            return out
+
+        # If user tapped Yes/No button intents
+        intent = tracker.latest_message.get("intent", {}).get("name")
+        if intent == "affirm":
+            out["reuse_ok"] = "yes"
+            return out
+        if intent == "deny":
+            out["reuse_ok"] = "no"
+            return out
+
+        dispatcher.utter_message(text="Please tap Yes or No.")
+        out["reuse_ok"] = None
+        return out
+
 
 
 class ValidateConfirmReuseDamageForm(FormValidationAction):
     def name(self) -> str:
         return "validate_confirm_reuse_damage_form"
 
-    def validate_reuse_ok(self, value, dispatcher, tracker, domain):
-        return _reuse_ok_common(value, tracker, dispatcher)
+    def validate_reuse_ok(
+        self,
+        value: Text,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+
+        # Always update emotion + criticality + conv-risk
+        out = _infer_emotion_slots(tracker)
+
+        # If this slot is not being requested, keep current value
+        if tracker.get_slot("requested_slot") != "reuse_ok":
+            out["reuse_ok"] = tracker.get_slot("reuse_ok")
+            return out
+
+        v = (value or "").strip().lower()
+        if v in {"yes", "y"}:
+            out["reuse_ok"] = "yes"
+            return out
+        if v in {"no", "n"}:
+            out["reuse_ok"] = "no"
+            return out
+
+        # Handle affirm/deny intents
+        intent = tracker.latest_message.get("intent", {}).get("name")
+        if intent == "affirm":
+            out["reuse_ok"] = "yes"
+            return out
+        if intent == "deny":
+            out["reuse_ok"] = "no"
+            return out
+
+        dispatcher.utter_message(text="Please tap Yes or No.")
+        out["reuse_ok"] = None
+        return out
+
 class ValidateAddressUpdateForm(FormValidationAction):
     def name(self) -> Text:
         return "validate_address_update_form"
