@@ -1,20 +1,58 @@
+from rasa_sdk.events import SessionStarted, ActionExecuted, EventType
 from typing import Any, Text, Dict, List, Optional
 from rasa_sdk import Action, Tracker, FormValidationAction
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.types import DomainDict
 import re
+import os
+import csv
 from rasa_sdk.events import SlotSet, EventType
-from datetime import datetime, timedelta
 import logging
 from threading import Lock
 from components.emotion import ensure_emotion_pipe, coarse_from_label, top_emotion 
 from components.criticality import infer_criticality_for_text
+from datetime import datetime, timedelta
 
+NOW = datetime.now()
 _init_lock = Lock()
 # Fake database for demo
 ORDER_DB = {
-    "ORD-12345": {"status": "Shipped", "eta": "2 days"},
-    "ORD-98765": {"status": "Processing", "eta": "4 days"},
+    # Classic shipped order – cannot cancel, can start return later
+    "ORD-12345": {
+        "status": "Shipped",
+        "eta": "2 days",
+        "created_at": (NOW - timedelta(days=2)).isoformat(),
+        "address": "123 Main St, Nicosia, 10001",
+        "email": "alex@example.com",
+        "total": 89.90,
+    },
+    # Recently placed, still processing – can cancel
+    "ORD-98765": {
+        "status": "Processing",
+        "eta": "4 days",
+        "created_at": (NOW - timedelta(hours=3)).isoformat(),
+        "address": "45 Green Rd, Larnaca, 6023",
+        "email": "maria@example.com",
+        "total": 149.50,
+    },
+    # Delivered order – for return / damage scenarios
+    "ORD-55555": {
+        "status": "Delivered",
+        "eta": "Delivered",
+        "created_at": (NOW - timedelta(days=5)).isoformat(),
+        "address": "10 Beach Ave, Limassol, 3300",
+        "email": "john@example.com",
+        "total": 59.00,
+    },
+    # On hold – useful for “update address” scenarios
+    "ORD-77777": {
+        "status": "On hold",
+        "eta": "TBD",
+        "created_at": (NOW - timedelta(hours=10)).isoformat(),
+        "address": "78 Lake St, Paphos, 8100",
+        "email": "sofia@example.com",
+        "total": 220.00,
+    },
 }
 
 ORDER_RE = re.compile(r"^ORD-\d{5}$", re.IGNORECASE)
@@ -23,8 +61,15 @@ EMAIL_RE = re.compile(r"[^@]+@[^@]+\.[^@]+")
 logger = logging.getLogger(__name__)
 
 _CRIT2SCORE = {"low": 0.2, "medium": 0.6, "high": 0.9}
-_SCORE2CRIT = lambda s: ("high" if s>=0.70 else "medium" if s>=0.5 else "low")
+_SCORE2CRIT = lambda s: ("high" if s>=0.65 else "medium" if s>=0.45 else "low")
 _ESCALATION_MAP = {"low":"none","medium":"potential","high":"escalate_now"}
+def _final_sentiment_from_conv_crit(conv_level: Optional[str]) -> str:
+    level = (conv_level or "medium").lower()
+    if level == "low":
+        return "positive"
+    if level == "high":
+        return "negative"
+    return "neutral"
 def _coarse(emotion: str) -> str:
     return coarse_from_label(emotion)
 def _ensure_pipe():  # keep your existing name to minimize diff
@@ -277,17 +322,11 @@ class ActionEscalateNow(Action):
     def name(self) -> Text:
         return "action_escalate_now"
 
-    def run(
-        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
-    ) -> List[Dict[Text, Any]]:
-        # Here you can create a ticket, ping a webhook, or notify a live queue
-        # Example message to the user:
+    def run(self, dispatcher, tracker, domain):
         dispatcher.utter_message(
             text="I’m escalating this to a human specialist right now. You’ll be connected shortly."
         )
-        # Add your integration here, e.g. requests.post(...)
-        return []
-
+        return [SlotSet("resolution_status", "escalated")]
 class ActionOfferHandoff(Action):
     def name(self) -> Text:
         return "action_offer_handoff"
@@ -299,7 +338,7 @@ class ActionOfferHandoff(Action):
         dispatcher.utter_message(
             text="This looks a bit urgent. Would you like me to bring a human agent into the chat?"
         )
-        return []
+        return [SlotSet("resolution_status", "escalated")]
 class ActionInferEmotion(Action):
     def name(self) -> Text:
         return "action_infer_emotion"
@@ -418,54 +457,75 @@ class ValidateDamageReportForm(FormValidationAction):
         return out
 class ActionCancelOrder(Action):
     def name(self) -> Text: return "action_cancel_order"
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        oid = tracker.get_slot("order_id"); confirm = tracker.get_slot("confirm_cancel")
-        if not oid: 
+
+    def run(self, dispatcher, tracker, domain):
+        oid = tracker.get_slot("order_id")
+        confirm = tracker.get_slot("confirm_cancel")
+        if not oid:
             dispatcher.utter_message(text="I need the order ID to cancel.")
-            return []
+            return [SlotSet("resolution_status", "fallback")]
         if not confirm:
             dispatcher.utter_message(text="Okay, I’ll keep the order as is.")
-            return clear_context_slots()
+            return clear_context_slots() + [SlotSet("resolution_status", "resolved")]
         rec = ORDER_DB.get(oid)
         if not rec:
             dispatcher.utter_message(text=f"Order {oid} not found.")
-            return clear_context_slots()
-        # business rule: allow cancel within 24h and if not shipped
+            return clear_context_slots() + [SlotSet("resolution_status", "fallback")]
         created = datetime.fromisoformat(rec.get("created_at", "2025-10-01"))
         if rec["status"].lower() == "shipped" or datetime.now() - created > timedelta(hours=24):
-            dispatcher.utter_message(text=f"Order {oid} can’t be canceled now. You can start a return after delivery.")
-            return clear_context_slots()
-        dispatcher.utter_message(text=f"Order {oid} has been canceled and refunded. You’ll see the refund in 3–5 days.")
-        return clear_context_slots()
+            dispatcher.utter_message(
+                text=f"Order {oid} can’t be canceled now. You can start a return after delivery.")
+            return clear_context_slots() + [SlotSet("resolution_status", "fallback")]
+        dispatcher.utter_message(
+            text=f"Order {oid} has been canceled and refunded. You’ll see the refund in 3–5 days.")
+        return clear_context_slots() + [SlotSet("resolution_status", "resolved")]
 
 class ActionStartReturn(Action):
-    def name(self) -> Text: return "action_start_return"
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        oid = tracker.get_slot("order_id"); reason = tracker.get_slot("return_reason")
+    def name(self) -> Text:
+        return "action_start_return"
+
+    def run(self, dispatcher, tracker, domain) -> List[EventType]:
+        oid = tracker.get_slot("order_id")
+        reason = tracker.get_slot("return_reason")
+
         if not oid or not reason:
             dispatcher.utter_message(text="I’m missing details for the return.")
-            return []
+            return [SlotSet("resolution_status", "fallback")]
+
         if oid not in ORDER_DB:
             dispatcher.utter_message(text=f"Order {oid} not found.")
-            return clear_context_slots()
-        dispatcher.utter_message(text=f"Return initiated for {oid} (reason: {reason}). You’ll receive a label by email shortly.")
-        return clear_context_slots()
-# --- Actions ---
-class ActionLookupOrderStatus(Action):
-    def name(self) -> Text:
-        return "action_lookup_order_status"
+            events = clear_context_slots()
+            # resolution in this case: failed / not_found (optional)
+            events.append(SlotSet("resolution_status", "not_found"))
+            export_events = ActionExportConversationSummary().run(dispatcher, tracker, domain)
+            events.extend(export_events)
+            return events
 
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        order_id = tracker.get_slot("order_id")
-        if not order_id:
-            dispatcher.utter_message(text="I couldn’t find an order ID. Please try again.")
-            return []
-        rec = ORDER_DB.get(order_id)
-        if not rec:
-            dispatcher.utter_message(text=f"Sorry, I can’t find {order_id}. Double-check the ID (e.g., ORD-12345).")
+        dispatcher.utter_message(
+            text=f"Return initiated for {oid} (reason: {reason}). You’ll receive a label by email shortly.")
+        events = clear_context_slots()
+        events.append(SlotSet("resolution_status", "return_started"))
+
+        export_events = ActionExportConversationSummary().run(dispatcher, tracker, domain)
+        events.extend(export_events)
+
+        return events
+
+# --- Actions ---
+class ActionLookupOrderStatusByEmail(Action):
+    def name(self) -> Text:
+        return "action_lookup_order_status_by_email"
+
+    def run(self, dispatcher, tracker, domain):
+        email = tracker.get_slot("lookup_email")
+        if email:
+            dispatcher.utter_message(
+                text=f"Found your latest order via {email}: ORD-12345 — Shipped, ETA 2 days."
+            )
+            return [SlotSet("lookup_email", None), SlotSet("resolution_status", "resolved")]
         else:
-            dispatcher.utter_message(text=f"Order {order_id}: {rec['status']} — ETA {rec['eta']}.")
-        return []
+            dispatcher.utter_message(text="I couldn’t find any orders for that email.")
+            return [SlotSet("lookup_email", None), SlotSet("resolution_status", "fallback")]
 
 class ActionPasswordReset(Action):
     def name(self) -> Text:
@@ -475,11 +535,14 @@ class ActionPasswordReset(Action):
         email = tracker.get_slot("email")
         if not email:
             dispatcher.utter_message(text="I need the account email to send a reset.")
-            return []
+            return [SlotSet("resolution_status", "fallback")]
         dispatcher.utter_message(text=f"Got it. A password reset email has been sent to {email}.")
         # clear context so future turns don't get hijacked
-        return [SlotSet("email", None)]
-
+        return [
+            SlotSet("issue_description", None),
+            SlotSet("order_id", None),
+            SlotSet("resolution_status", "resolved"),
+        ]
 class ActionRequestHandoff(Action):
     def name(self) -> Text: 
         return "action_request_handoff"
@@ -494,7 +557,10 @@ class ActionRequestHandoff(Action):
         )
 
         # optional: mark that a handoff was requested
-        return [SlotSet("handoff_requested", True)]
+        return [
+            SlotSet("resolution_status", "escalated"),
+            SlotSet("handoff_requested", True),
+        ]
 
 # Optional: clear context when user starts a new flow
 class ActionClearContext(Action):
@@ -548,47 +614,72 @@ class ActionRecordDamageTicket(Action):
     def name(self) -> Text:
         return "action_record_damage_ticket"
 
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    def run(self, dispatcher, tracker, domain):
         order_id = tracker.get_slot("order_id")
         desc = tracker.get_slot("issue_description")
-        if not order_id or not desc:
-            dispatcher.utter_message(text="I’m missing some details. Please provide the order ID and a short description.")
-            return []
-        # Here you’d create a real ticket (Jira/Email/DB). We just confirm:
-        dispatcher.utter_message(text=f"Ticket created for {order_id}: '{desc}'. A support agent will follow up shortly.")
-        # Clear context to avoid flow leakage
-        return [SlotSet("issue_description", None), SlotSet("order_id", None)]
-class ActionLookupOrderStatusByEmail(Action):
-    def name(self) -> Text:
-        return "action_lookup_order_status_by_email"
 
-    def run(self, dispatcher, tracker, domain):
-        email = tracker.get_slot("lookup_email")
-        # demo behavior: pretend the latest order for that email is ORD-12345
-        if email:
-            dispatcher.utter_message(text=f"Found your latest order via {email}: ORD-12345 — Shipped, ETA 2 days.")
-        else:
-            dispatcher.utter_message(text="I couldn’t find any orders for that email.")
-        # clear temp slots
-        return [SlotSet("lookup_email", None)]
-class ActionUpdateAddress(Action):
-    def name(self) -> Text: return "action_update_address"
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        oid = tracker.get_slot("order_id"); addr = tracker.get_slot("new_address")
-        if not oid or not addr:
-            dispatcher.utter_message(text="I need both the order ID and the new address.")
-            return []
-        rec = ORDER_DB.get(oid)
-        if not rec:
-            dispatcher.utter_message(text=f"Order {oid} not found.")
-            return clear_context_slots()
-        if rec["status"].lower() == "shipped":
-            dispatcher.utter_message(text=f"Order {oid} already shipped; I can’t change the address. Try carrier redirect.")
-            return clear_context_slots()
-        rec["address"] = addr
-        dispatcher.utter_message(text=f"Address for {oid} updated to: {addr}.")
-        return clear_context_slots()
-# ---- Validators for new forms ----
+        if not order_id or not desc:
+            dispatcher.utter_message(
+                text="I’m missing some details. Please provide the order ID and a short description."
+            )
+            return [SlotSet("resolution_status", "fallback")]
+
+        dispatcher.utter_message(
+            text=f"Ticket created for {order_id}: '{desc}'. A support agent will follow up shortly."
+        )
+        return [
+            SlotSet("issue_description", None),
+            SlotSet("order_id", None),
+            SlotSet("resolution_status", "resolved"),
+        ]
+
+class ActionSessionStart(Action):
+    def name(self) -> Text:
+        return "action_session_start"
+
+    def run(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> List[EventType]:
+        # record current UTC as session start
+        now = datetime.utcnow().isoformat()
+
+        logger.info("[session] start session_id=%s at %s", tracker.sender_id, now)
+
+        return [
+            SessionStarted(),
+            ActionExecuted("action_listen"),
+            SlotSet("session_start_time", now),
+            SlotSet("primary_intent", None),
+            SlotSet("resolution_status", None),
+            SlotSet("final_sentiment", None),
+            SlotSet("handoff_requested", False),
+        ]
+class ActionSetPrimaryIntent(Action):
+    def name(self) -> Text:
+        return "action_set_primary_intent"
+
+    def run(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> List[EventType]:
+        current = tracker.get_slot("primary_intent")
+        latest_intent = tracker.latest_message.get("intent", {}).get("name")
+
+        if current is None and latest_intent:
+            logger.info(
+                "[session] setting primary_intent=%s for session_id=%s",
+                latest_intent,
+                tracker.sender_id,
+            )
+            return [SlotSet("primary_intent", latest_intent)]
+
+        return []
+
 class ValidateReturnForm(FormValidationAction):
     def name(self) -> Text:
         return "validate_return_form"
@@ -862,3 +953,130 @@ class ValidateAddressUpdateForm(FormValidationAction):
 
         out["new_address"] = value.strip()
         return out
+class ActionExportConversationSummary(Action):
+    def name(self) -> Text:
+        return "action_export_conversation_summary"
+
+    def run(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> List[EventType]:
+
+        # --- guard: if we've already exported this session, do nothing ---
+        if tracker.get_slot("export_done"):
+            logger.info("[dataset] export already done for this session; skipping.")
+            return []
+
+        session_id = tracker.sender_id
+        start_time = tracker.get_slot("session_start_time")
+        primary_intent = tracker.get_slot("primary_intent") or "unknown"
+        resolution_status = tracker.get_slot("resolution_status") or "unknown"
+        conv_level = tracker.get_slot("conversation_criticality")
+
+        # if final_sentiment not set yet, derive from conversation criticality
+        final_sentiment = tracker.get_slot("final_sentiment") or _final_sentiment_from_conv_crit(conv_level)
+        handoff = bool(tracker.get_slot("handoff_requested") or False)
+
+        # --- compute total_messages & duration from events ---
+        events = list(tracker.events)
+        first_ts = None
+        last_ts = None
+        total_messages = 0
+
+        for e in events:
+            etype = e.get("event")
+            ts = e.get("timestamp")
+            if etype in {"user", "bot"}:
+                total_messages += 1
+                if ts is not None:
+                    if first_ts is None or ts < first_ts:
+                        first_ts = ts
+                    if last_ts is None or ts > last_ts:
+                        last_ts = ts
+
+        if first_ts is not None and last_ts is not None:
+            duration_seconds = last_ts - first_ts
+        else:
+            duration_seconds = 0.0
+
+        # if start_time slot is missing, reconstruct from first_ts
+        if not start_time and first_ts is not None:
+            start_time = datetime.utcfromtimestamp(first_ts).isoformat()
+
+        row = {
+            "Session_ID": session_id,
+            "Start_time": start_time,
+            "User_intent": primary_intent,
+            "Resolution_Status": resolution_status,
+            "Final_Sentiment": final_sentiment,
+            "Handoff_to_agent": "yes" if handoff else "no",
+            "total_messages": total_messages,
+            "conversation_duration": duration_seconds,
+        }
+
+        logger.info("[dataset] row=%s", row)
+
+        # --- append to CSV file (once, with header if needed) ---
+        csv_path = os.path.join("data", "conversation_sessions.csv")
+        os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+
+        fieldnames = [
+            "Session_ID",
+            "Start_time",
+            "User_intent",
+            "Resolution_Status",
+            "Final_Sentiment",
+            "Handoff_to_agent",
+            "total_messages",
+            "conversation_duration",
+        ]
+
+        file_exists = os.path.exists(csv_path)
+
+        with open(csv_path, mode="a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(row)
+
+        # mark export as done + persist final_sentiment
+        return [
+            SlotSet("final_sentiment", final_sentiment),
+            SlotSet("export_done", True),
+        ]
+class ActionMarkFallback(Action):
+    def name(self) -> Text:
+        return "action_mark_fallback"
+
+    def run(self, dispatcher, tracker, domain):
+        current = tracker.get_slot("resolution_status")
+        if not current or current == "unknown":
+            return [SlotSet("resolution_status", "fallback")]
+        return []
+class ActionUpdateAddress(Action):
+    def name(self) -> Text: return "action_update_address"
+
+    def run(self, dispatcher, tracker, domain):
+        oid = tracker.get_slot("order_id")
+        addr = tracker.get_slot("new_address")
+
+        if not oid or not addr:
+            dispatcher.utter_message(text="I need both the order ID and the new address.")
+            return [SlotSet("resolution_status", "fallback")]
+
+        rec = ORDER_DB.get(oid)
+        if not rec:
+            dispatcher.utter_message(text=f"Order {oid} not found.")
+            return clear_context_slots() + [SlotSet("resolution_status", "fallback")]
+
+        if rec["status"].lower() == "shipped":
+            dispatcher.utter_message(
+                text=f"Order {oid} already shipped; I can’t change the address. Try carrier redirect."
+            )
+            return clear_context_slots() + [SlotSet("resolution_status", "fallback")]
+
+        rec["address"] = addr
+        dispatcher.utter_message(text=f"Address for {oid} updated to: {addr}.")
+        return clear_context_slots() + [SlotSet("resolution_status", "resolved")]

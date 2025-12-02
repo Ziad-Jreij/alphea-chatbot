@@ -8,6 +8,10 @@ nlu:
     - good morning
     - good evening
     - hey bot
+    - hey
+    - hi there
+    - hello there
+    - good afternoon
 
 - intent: goodbye
   examples: |
@@ -18,6 +22,10 @@ nlu:
     - adios 
     - see you 
     - talk later
+    - bye bye
+    - see ya
+    - catch you later
+    - talk soon
 - intent: affirm
   examples: |
     - yes
@@ -25,6 +33,10 @@ nlu:
     - correct
     - that's right
     - sure
+    - absolutely
+    - of course
+    - that works for me
+    - that’s fine
 - intent: deny
   examples: |
     - no
@@ -32,6 +44,10 @@ nlu:
     - not really
     - wrong
     - absolutely not
+    - not at all
+    - no thanks
+    - I don’t think so
+    - that’s not what I meant
 
 - intent: ask_order_status
   examples: |
@@ -61,13 +77,34 @@ nlu:
     - can you track my order
     - track my shipment
     - check delivery status
+    - can you see if my order has shipped?
+    - what is happening with my delivery?
+    - check the status of my last order
+    - did my order go through?
+    - I placed an order yesterday, where is it now?
+    - can you tell me if my order is on the way?
 - intent: reset_password
   examples: |
     - I forgot my password
     - reset my password
     - help me recover my account
-    - my email is [alex@example.com](email)
     - I need to change my password
+    - I can't log into my account
+    - I'm locked out of my account
+    - I can't sign in
+    - my login isn't working
+    - I don't remember my login password
+    - I can't access my account anymore
+    - I’m locked out, it says wrong password
+    - I keep getting a login error
+    - sign in isn’t working for me
+    - my account password doesn’t work
+    - I need help logging into my account
+    - I need to reset my password
+    - how do I reset my password
+    - can you help me with a password reset
+    - help me change my password
+    - password reset please
 
 - intent: report_damaged_product
   examples: |
@@ -79,12 +116,22 @@ nlu:
     - the package arrived damaged
     - product is faulty
     - damaged delivery
+    - the item arrived broken
+    - there is a crack in the screen
+    - the box was completely smashed
+    - my order came with missing parts
+    - my device doesn’t turn on and looks damaged
+    - the screen is cracked on my device
+    - my package arrived open and parts are missing
+    - the product looks scratched and used
+    - my order was completely smashed in the box
+    - the item is not in one piece
+    - I think the product was damaged during shipping
 
 - intent: start_return
   examples: |
     - I want to return my order
     - start a return
-    - request a refund
     - return item
     - how do I send something back?
     - initiate a return
@@ -100,6 +147,16 @@ nlu:
     - begin the return procedure please
     - let me return a product.
     - I need to send back order [ORDER-ABCD](order_id)
+    - can I get a refund for my order?
+    - I want my money back for this purchase
+    - I’d like a refund on this item
+    - I want to send this back
+    - I’m not happy with this, I want to return it
+    - how do I get my money back for this order?
+    - I changed my mind about this purchase
+    - I’d like to return what I bought
+    - I want to return the item I received yesterday
+
 
 - intent: cancel_order
   examples: |
@@ -108,6 +165,13 @@ nlu:
     - I want to stop this order
     - please cancel order
     - I need to stop the shipment
+    - I changed my mind, cancel the order
+    - I ordered by mistake, can you cancel it?
+    - I want to cancel the purchase I just made
+    - please stop this order from going out
+    - I made a mistake, cancel this order
+    - I don’t want this order anymore
+    - can you cancel the purchase I just made?
 
 - intent: update_address
   examples: |
@@ -116,6 +180,9 @@ nlu:
     - wrong address on my order
     - I moved, update address
     - need to change the delivery location
+    - send it to a different address
+    - I typed the wrong address
+    - can I update my shipping info?
 
 - intent: talk_to_human
   examples: |
@@ -124,6 +191,17 @@ nlu:
     - escalate me to support
     - get me a person
     - connect me with a representative
+    - I want to speak to a real person
+    - let me talk to customer service
+    - stop the bot and give me an agent
+    - I need to fix my shipping address
+    - I entered the wrong address by mistake
+    - can you send my order to a different address?
+    - I want to change where the order is delivered
+    - I want to talk to customer service
+    - stop the bot, give me a real person
+    - can a human help me with this?
+    - I’d rather speak with an agent
 
 - intent: urgent_contact
   examples: |
@@ -132,28 +210,36 @@ nlu:
     - very urgent
     - escalate now
     - critical problem
+    - this is an emergency
+    - something is seriously wrong
+    - this can’t wait
+    - this needs attention right now
+    - please treat this as urgent
+    - I need help immediately
+    - this is very serious and can’t wait
 
 # --- FAQ Intents (Standardized to use 'faq/' prefix) ---
 - intent: refund_policy
   examples: |
     - what's your refund policy?
-    - can I get a refund?
-    - return policy please
     - what is your refund period?
     - how long do I have to return?
     - refund period
-    - what is your refund policy?
     - tell me about refunds
     - how long do I have to request a refund?
     - what are the guidelines for getting my money back?
-    - is it possible to get a refund?
-    - what's the refund window?
     - what are the terms for a refund?
     - do you offer a money-back guarantee?
-    - can I get my payment reversed?
     - what's the procedure for a refund?
     - I need to know the official refund rules.
     - what is the deadline to ask for a refund?
+    - what is your return and refund policy?
+    - where can I read your refund policy?
+    - explain your return and refund terms
+    - what are your rules for returning items?
+    - what is your policy on refunds?
+    - how do refunds work with your store?
+    - do you allow returns on all products?
 
 - intent: shipping_times
   examples: |
@@ -162,6 +248,10 @@ nlu:
     - delivery time estimate
     - how long is shipping
     - when will it arrive
+    - how long until my order shows up?
+    - when should I expect my delivery?
+    - what is the usual shipping time?
+    - how many days does shipping take?
 
 - intent: store_hours
   examples: |
@@ -169,6 +259,10 @@ nlu:
     - when are you open
     - support hours
     - what time does your support team start?
+    - what time does support close?
+    - until what time are you available?
+    - when can I reach customer service?
+    - what are your customer support opening hours?
 
 - intent: faq/contact_channels
   examples: |
@@ -237,19 +331,28 @@ nlu:
     - five stars, great product!
     - couldn't be happier with it
     - highly recommend this item
+    - this product is amazing
+    - I’m really satisfied with what I got
+    - great value for money
+    - I’m very happy with this purchase
 - intent: product_feedback_negative
   examples: |
-     - I'm unhappy with my product
-     - I'm disappointed with my purchase
-     - the product is bad
-     - it doesn't work as expected
-     - I'm not satisfied
-     - this is terrible quality
-     - total waste of money
-     - the item arrived broken
-     - I demand a refund for this junk
-     - worst purchase ever
-     - I have a major complaint about the product
+    - I'm unhappy with my product
+    - I'm disappointed with my purchase
+    - the product is bad
+    - it doesn't work as expected
+    - I'm not satisfied
+    - this is terrible quality
+    - total waste of money
+    - I demand a refund for this junk
+    - worst purchase ever
+    - I have a major complaint about the product
+    - this product is not worth the price
+    - I regret buying this
+    - this product is not good at all
+    - I regret buying this item
+    - the quality doesn’t match the price
+    - I’m really disappointed in this product
 - intent: out_of_scope_general
   examples: |
      - tell me about quantum physics
@@ -265,6 +368,10 @@ nlu:
      - what year did the Titanic sink?
      - who is the CEO of Google?
      - what is the largest mammal on Earth?
+     - explain Einstein’s theory of relativity
+     - who is the president of another country?
+     - tell me a random fun fact
+     - what movie should I watch tonight?
 
 - intent: out_of_scope_personal_distress
   examples: |
@@ -281,6 +388,10 @@ nlu:
      - I'm having a family emergency
      - I need emotional support
      - today is very tough for me
+     - I’m really struggling with my mental health
+     - I feel like I can’t cope anymore
+     - I’m going through something very painful
+     - I just need someone to listen to me right now
 # --- RegEx and Lookup Tables ---
 - regex: order_id
   examples: |

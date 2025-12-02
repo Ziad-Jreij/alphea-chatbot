@@ -20,6 +20,11 @@ intents:
   - store_hours
   - chitchat
   - no_order_id
+  - product_feedback_positive
+  - product_feedback_negative
+  - out_of_scope_general
+  - out_of_scope_personal_distress
+  - faq_contact_channels
 entities:
   - order_id
   - email
@@ -33,6 +38,37 @@ entities:
   - escalation
 
 slots:
+    ################ DATASET 1 <|>
+  export_done:
+    type: bool
+    influence_conversation: false
+    initial_value: false
+    mappings:
+      - type: custom  
+  session_start_time:
+    type: text
+    influence_conversation: false
+    mappings: [{ type: custom }]
+
+  primary_intent:
+    type: text
+    influence_conversation: false
+    mappings: [{ type: custom }]
+
+  resolution_status:
+    type: text
+    influence_conversation: false
+    mappings: [{ type: custom }]
+
+  final_sentiment:
+    type: text
+    influence_conversation: false
+    mappings: [{ type: custom }]
+
+  handoff_requested:
+    type: bool
+    influence_conversation: false
+    mappings: [{ type: custom }]
   overall_emotion:
     type: text
     influence_conversation: false
@@ -204,67 +240,127 @@ slots:
 responses:
   # Main Conversation Responses
   utter_ack_positive_feedback:
-    - text: "Awesome to hear that! 🎉 Is there anything else I can help you with?"
+    - text: >
+        That’s wonderful to hear! 😊 I’m really glad the product is working well for you.
+        If you’d like, I can also help you with anything related to your orders, returns,
+        or account.
+      buttons:
+        - title: "Track my order"
+          payload: "/ask_order_status"
+        - title: "Start a return"
+          payload: "/start_return"
+        - title: "Talk to a human"
+          payload: "/talk_to_human"
+
   utter_ack_negative_feedback:
-    - text: "Sorry to hear that. I can help you fix this—what would you like to do next?"
+    - text: >
+        I’m really sorry that your experience hasn’t been great. Thank you for sharing this—
+        it helps us improve. Let’s decide together what you’d like to do next.
+      buttons:
+        - title: "Report a damaged product"
+          payload: "/report_damaged_product"
+        - title: "Start a return / refund"
+          payload: "/start_return"
+        - title: "Talk to a human"
+          payload: "/talk_to_human"
+
   utter_show_empathy:
-    - text: "I’m sorry this has been frustrating. I’m here to help fix it."
+    - text: >
+        I’m really sorry this has been frustrating. Your issue matters, and I’m here to help
+        you sort it out step by step.
+
   utter_ask_more_help:
-    - text: "Is there anything else I can help you with?"
+    - text: "Is there anything else I can help you with right now?"
+
   utter_ask_lookup_email:
-    - text: "No problem—what email did you use for the order?"
+    - text: >
+        No problem, we can search by email instead. Which email address did you use
+        when placing the order?
+
   utter_ask_reuse_ok:
-    - text: "Is this about the same order {order_id}?"
+    - text: >
+        I see you have a recent order {order_id}. Is this the order you’re asking about,
+        or is it for a different one?
       buttons:
         - title: "Yes, same order"
           payload: "yes"
         - title: "No, different order"
           payload: "no"
+
   utter_ask_anything_else:
-    - text: "Is there anything else you'd like me to help you with?"
+    - text: "Is there anything else you’d like me to help you with today?"
+
   utter_welcome_menu:
-    - text: "Choose an option to get started:"
+    - text: >
+        Let me know how I can assist you.
       buttons:
         - title: "Track my order"
           payload: "/ask_order_status"
-        - title: "Reset password"
-          payload: "/reset_password"
-        - title: "Start a return"
+        - title: "Report damaged product"
+          payload: "/report_damaged_product"
+        - title: "Start a return / refund"
           payload: "/start_return"
         - title: "Update shipping address"
           payload: "/update_address"
-        - title: "Cancel order"
+        - title: "Cancel an order"
           payload: "/cancel_order"
-        - title: "Report damaged item"
-          payload: "/report_damaged_product"
+        - title: "Reset my password"
+          payload: "/reset_password"
+        - title: "Contact options & hours"
+          payload: "/faq_contact_channels"
         - title: "Talk to a human"
           payload: "/talk_to_human"
+
   utter_greet:
-    - text: "Hello! How can I help you today?"
+    - text: >
+        Hello! I’m Aletheia, your virtual customer service assistant. 🌿
+        You can choose an option below or simply tell me what you’d like to do,
+        like “track my order” or “I want to return an item”.
+
   utter_goodbye:
-    - text: "Glad I could help. Have a great day!"
+    - text: >
+        Thanks for reaching out today. If you need anything else later, I’ll be here.
+        Have a great day! ✨
+
   utter_handoff_ack:
-    - text: "Okay, I will connect you to a human agent now."
+    - text: >
+        Got it. I’ll connect you to a human agent now. Please stay in the chat —
+        they’ll review this conversation so you don’t have to repeat everything.
+
   utter_ack_damage:
-    - text: "I'm sorry about that. I'll help you with a damage report."
+    - text: >
+        I’m really sorry your item arrived in poor condition. Let’s file a quick
+        damage report so we can fix this for you as soon as possible.
 
   # Prompts (Forms)
   utter_ask_order_id:
-    - text: "Sure — what is your order ID? (e.g., ORD-12345)"
+    - text: >
+        Sure — what is your order ID? (for example, ORD-12345)
       buttons:
         - title: "I don't have it"
           payload: "/no_order_id"
+
   utter_ask_email:
-    - text: "What email did you use for the account?"
+    - text: "Which email address is linked to your account or order?"
       buttons:
         - title: "Use a different email"
           payload: "/deny"
+
   utter_ask_issue_description:
-    - text: "Please describe the damage (e.g., broken screen, dented corner)."
+    - text: >
+        Please describe the damage in a few words (for example: “broken screen”,
+        “dented corner”, or “missing parts”). This helps the support team act faster.
+
   utter_ask_new_address:
-    - text: "What is the new shipping address (full address including city & ZIP)?"
+    - text: >
+        Please provide the new full shipping address, including street, city,
+        postal code, and country.
+
   utter_ask_return_reason:
-    - text: "Please tell me the return reason (e.g., changed mind, damaged, wrong item)."
+    - text: >
+        What is the main reason for your return? (for example: changed mind,
+        damaged item, wrong item received, doesn’t fit, etc.)
+
   utter_ask_confirm_cancel:
     - text: "Are you sure you want to cancel this order?"
       buttons:
@@ -275,55 +371,125 @@ responses:
 
   # Validation Errors
   utter_order_id_invalid:
-    - text: "That doesn't look like a valid order ID (e.g., ORD-12345). Could you recheck it?"
+    - text: >
+        That doesn’t look like a valid order ID (for example, ORD-12345).
+        Please double-check it and try again.
+
   utter_email_invalid:
-    - text: "That email looks invalid. Please enter a valid address."
+    - text: >
+        That doesn’t look like a valid email address. Please enter a valid email
+        (for example, name@example.com).
 
   # Fallback
   utter_default:
-    - text: "I didn't quite get that. Could you rephrase or choose an option below?"
+    - text: >
+        I’m not sure I understood that correctly. Could you rephrase it, or choose one
+        of the options below so I can guide you?
       buttons:
         - title: "Track my order"
           payload: "/ask_order_status"
-        - title: "Reset password"
-          payload: "/reset_password"
-        - title: "Refund policy"
-          payload: "/refund_policy"
+        - title: "Start a return / refund"
+          payload: "/start_return"
+        - title: "Report damaged product"
+          payload: "/report_damaged_product"
         - title: "Talk to a human"
           payload: "/talk_to_human"
 
   # FAQs (Retrieval Intents & Generic FAQ)
-  utter_faq: # <-- ADDED: Generic FAQ fallback
-    - text: "I can help with store hours, shipping times, or the refund policy. What information do you need?"
-  utter_faq_refund_window: # <-- RENAMED from 'utter_faq/refund_window'
-    - text: "You can request a refund within 14 days for unopened items. Do you want the full policy link?"
-  utter_faq_contact_channels: # Renamed for consistency
-    - text: "We are available via chat (09:00-18:00 EET), email support@company.com, or phone +357-XXXX."
+  utter_faq:
+    - text: >
+        I can help you with shipping times, store hours, contact options, and our refund
+        policy. What would you like to know?
+      buttons:
+        - title: "Refund & return policy"
+          payload: "/refund_policy"
+        - title: "Shipping times"
+          payload: "/shipping_times"
+        - title: "Store & support hours"
+          payload: "/store_hours"
+        - title: "Contact channels"
+          payload: "/faq_contact_channels"
+
+  utter_faq_refund_window:
+    - text: >
+        Our standard refund and return period is 14 days from the delivery date, as long
+        as the item is in its original condition (unless local regulations provide additional
+        rights).  
+        If you’d like, I can help you start a return or connect you to a human agent.
+      buttons:
+        - title: "Start a return"
+          payload: "/start_return"
+        - title: "Talk to a human"
+          payload: "/talk_to_human"
+
+  utter_faq_contact_channels:
+    - text: >
+        You can reach our support team in several ways:
+        • Live chat: 09:00–18:00 EET  
+        • Email: support@company.com  
+        • Phone: +357-XXXXXXX  
+
+        If you tell me what you need, I can also try to handle it directly here in the chat.
+
   utter_store_hours:
-    - text: "Support is available Mon–Fri 09:00–18:00 EET."
+    - text: >
+        Our customer support team is available Monday to Friday, from 09:00 to 18:00 EET.
+        You can still leave a message outside these hours, and someone will follow up.
+
   utter_shipping_times:
-    - text: "Standard shipping is 3–5 business days after dispatch; Express is 1–2 days where available."
+    - text: >
+        Standard shipping usually takes 3–5 business days after dispatch.  
+        Express shipping (where available) typically arrives within 1–2 business days.
+        Actual times may vary slightly depending on your location and carrier.
 
   # Chitchat
   utter_chitchat/ask_howareyou:
-    - text: "Doing great! How can I help you with your order or account?"
+    - text: >
+        I’m doing great, thank you for asking! 😊  
+        How can I help you today — do you want to check an order, report an issue,
+        or ask about something else?
+
   utter_chitchat/thanks:
-    - text: "You're welcome! Anything else I can help with?"
+    - text: "You’re very welcome! If you need anything else, just let me know. 💬"
+
   utter_chitchat/ask_name:
-    - text: "I’m your customer service assistant."
+    - text: >
+        I’m Aletheia, your virtual customer service assistant. I’m here to help you with
+        orders, returns, and account questions.
+
   utter_oos_generic:
-    - text: "That's outside my area of expertise. I specialize in helping you with orders, accounts, and support issues"
+    - text: >
+        That’s an interesting question, but it’s outside what I can help with.  
+        I’m designed to assist with orders, deliveries, returns, product issues,
+        and account questions.  
+        If you’d like, tell me what you need help with in one of those areas.
 
   utter_oos_personal_condolences:
-    - text: "I’m really sorry. If there’s anything I can do for your order or account today, I’m here to help."
+    - text: >
+        I’m really sorry you’re going through something so difficult. 💛  
+        I’m not able to fully support personal or emotional situations, but if there’s
+        anything practical I can do for your order or account, I’m here to help.
 
-  # Optional: if someone expresses severe distress / crisis (you can trigger this later)
+  # Distress / Crisis Guidance (non-clinical, supportive)
   utter_crisis_help:
-    - text: "I’m really sorry you’re going through this. If you might be in danger or considering self-harm, please seek immediate help from local emergency services or a trusted person. I can also help with your order whenever you’re ready."
+    - text: >
+        I’m truly sorry that you’re feeling this way. Your well-being is very important.  
+        If you might be in danger or thinking about harming yourself, please contact local
+        emergency services or a trusted person immediately.  
+        If you have access to a mental health hotline or professional support, reaching out
+        to them could really help.  
+        When you’re ready, I can still assist you with any order or account tasks here.
+
   utter_acknowledge_critical_issue:
-    - text: "Got it. This seems serious. Let me secure help right away."
+    - text: >
+        I understand — this sounds serious and important. I’m going to prioritize your
+        case and make sure it’s handled with extra care.
+
   utter_escalation_banner:
-    - text: "I will connect you to a human agent now."
+    - text: >
+        I’m escalating this conversation to a human specialist so you can get dedicated
+        support. Please stay online — they’ll join you as soon as possible.
+
 actions:
   - action_infer_emotion
   - action_lookup_order_status
@@ -349,6 +515,10 @@ actions:
   - action_escalate_now
   - action_offer_handoff
   - action_update_conversation_risk
+  - action_session_start
+  - action_set_primary_intent
+  - action_export_conversation_summary
+  - action_mark_fallback
 
 forms:
   confirm_reuse_address_form:
@@ -373,3 +543,8 @@ forms:
     required_slots: [order_id, confirm_cancel]
   address_update_form:
     required_slots: [order_id, new_address]
+
+
+session_config:
+  session_expiration_time: 180  # or whatever you use
+  carry_over_slots_to_new_session: true

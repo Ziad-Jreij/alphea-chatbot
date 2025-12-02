@@ -131,8 +131,8 @@ def _apply_keyword_overrides_text(text: str) -> Optional[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 _CRIT_MODEL_NAME = "facebook/bart-large-mnli"
-_CRIT_LABELS = ["low urgency", "medium urgency", "high urgency"]
-_CRIT_HYPOTHESIS = "This support request is {}."
+_CRIT_LABELS = ["not urgent and can wait", "moderately urgent and should be handled soon", "very urgent and needs immediate attention"]
+_CRIT_HYPOTHESIS = "The customer's support request is {}."
 
 _crit_lock = Lock()
 _crit_pipe = None

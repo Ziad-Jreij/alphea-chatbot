@@ -21,15 +21,15 @@ pipeline:
   - name: ResponseSelector
     epochs: 60
   - name: FallbackClassifier
-    threshold: 0.55
-    ambiguity_threshold: 0.05
+    threshold: 0.4
+    ambiguity_threshold: 0.1
 
   - name: components.emotion.EmotionClassifierComponent
 
   - name: components.criticality.CriticalityZeroShotComponent
     model_name: "facebook/bart-large-mnli"   
-    hypothesis_template: "This support request is {}."
-    labels: ["low urgency", "medium urgency", "high urgency"]
+    hypothesis_template: "The customer's support request is {}."
+    labels: ["not urgent and can wait", "moderately urgent and should be handled soon", "very urgent and needs immediate attention"]
     boost_from_emotion: true
     heuristics_enabled: true
     gpu: false     

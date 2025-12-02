@@ -21,6 +21,7 @@ rules:
 - rule: Respond to Shipping times
   steps:
     - intent: shipping_times
+    - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: utter_shipping_times
@@ -28,6 +29,7 @@ rules:
 - rule: Respond to Store hours
   steps:
     - intent: store_hours
+    - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: utter_store_hours
@@ -35,10 +37,17 @@ rules:
 - rule: Respond to Refund policy
   steps:
     - intent: refund_policy
+    - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: utter_faq_refund_window
 
+- rule: Respond to contact channels FAQ
+  steps:
+    - intent: faq_contact_channels
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: utter_faq_contact_channels
 
 - rule: Handle generic FAQ intent
   steps:
@@ -50,6 +59,7 @@ rules:
 - rule: Human handoff
   steps:
     - intent: talk_to_human
+    - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: action_request_handoff
@@ -69,6 +79,8 @@ rules:
     - intent: nlu_fallback
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: utter_default
+    - action: action_mark_fallback
     - action: action_soft_affirmation
 
 - rule: Fallback confirmed
@@ -95,24 +107,16 @@ rules:
 - rule: Activate order status form
   steps:
     - intent: ask_order_status
+    - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: order_status_form
     - active_loop: order_status_form
 
-- rule: Activate damage report form
-  steps:
-    - intent: report_damaged_product
-    - action: action_infer_emotion
-    - action: action_update_conversation_risk
-    - action: action_clear_context
-    - action: utter_ack_damage
-    - action: damage_report_form
-    - active_loop: damage_report_form
-
 - rule: Activate cancel order form
   steps:
     - intent: cancel_order
+    - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: action_clear_context
@@ -136,7 +140,14 @@ rules:
     - action: password_reset_form
     - active_loop: null
     - action: action_password_reset
-
+- rule: Activate return form
+  steps:
+    - intent: start_return
+    - action: action_set_primary_intent
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: return_form
+    - active_loop: return_form
 - rule: Submit return form
   condition:
     - active_loop: return_form
@@ -165,6 +176,7 @@ rules:
     - active_loop: null
   steps:
     - action: utter_ask_anything_else
+    - action: utter_ask_more_help
 # --- Form Interruption Rules (Examples) ---
 
 - rule: Interrupt form for human handoff
@@ -221,13 +233,12 @@ rules:
     - action: order_lookup_by_email_form
     - active_loop: null
     - action: action_lookup_order_status_by_email
-- rule: Handle chitchat & show menu
+- rule: Handle chitchat 
   steps:
     - intent: chitchat
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: utter_chitchat
-    - action: utter_welcome_menu
 - rule: Submit damage report
   condition:
     - active_loop: damage_report_form
@@ -262,6 +273,7 @@ rules:
         - order_id: null
   steps:
     - intent: update_address
+    - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: action_clear_context
@@ -296,6 +308,7 @@ rules:
         - order_id: null
   steps:
     - intent: report_damaged_product
+    - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: action_clear_context
@@ -305,6 +318,7 @@ rules:
 - rule: Positive product feedback
   steps:
     - intent: product_feedback_positive
+    - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: utter_ack_positive_feedback
@@ -313,6 +327,7 @@ rules:
 - rule: Negative product feedback
   steps:
     - intent: product_feedback_negative
+    - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: utter_ack_negative_feedback
@@ -320,24 +335,20 @@ rules:
 - rule: Handle out of scope (general)
   steps:
     - intent: out_of_scope_general
+    - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: utter_oos_generic
     - action: utter_welcome_menu
-
 - rule: Handle out of scope (personal distress)
   steps:
     - intent: out_of_scope_personal_distress
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: utter_show_empathy
+    - action: utter_crisis_help
     - action: utter_oos_personal_condolences
     - action: utter_welcome_menu
-- rule: Escalate now when high criticality
-  condition:
-    - slot_was_set:
-        - escalation: "escalate_now"
-  steps:
-    - action: action_escalate_now
 
 - rule: Offer human handoff when potential escalation
   condition:
@@ -345,16 +356,139 @@ rules:
         - escalation: "potential"
   steps:
     - action: action_offer_handoff
+# When per-turn criticality says escalate_now
+- rule: Escalate now when high criticality
+  condition:
+    - slot_was_set:
+        - escalation: "escalate_now"
+  steps:
+    - action: utter_show_empathy
+    - action: utter_acknowledge_critical_issue
+    - action: utter_escalation_banner
+    - action: action_escalate_now
+
+
+# When conversation-level risk says escalate_now
 - rule: Escalate now when conversation-level says so
   condition:
     - slot_was_set:
         - conversation_escalation: escalate_now
   steps:
+    - action: utter_show_empathy
+    - action: utter_acknowledge_critical_issue
+    - action: utter_escalation_banner
     - action: action_escalate_now
-
+# When conversation-level risk is "potential" → gentle empathy + offer handoff
 - rule: Offer handoff when conversation-level is potential
   condition:
     - slot_was_set:
         - conversation_escalation: potential
   steps:
+    - action: utter_show_empathy
+    - action: utter_escalation_banner
     - action: action_offer_handoff
+- rule: Ask for order_id in order status form
+  condition:
+    - active_loop: order_status_form
+  steps:
+    - action: utter_ask_order_id
+- rule: Ask for new_address in address update form
+  condition:
+    - active_loop: address_update_form
+  steps:
+    - action: utter_ask_new_address
+- rule: Ask for lookup_email
+  condition:
+    - active_loop: order_lookup_by_email_form
+  steps:
+    - action: utter_ask_lookup_email
+- rule: Ask for return_reason
+  condition:
+    - active_loop: return_form
+  steps:
+    - action: utter_ask_return_reason
+- rule: Ask reuse_ok for address confirm
+  condition:
+    - active_loop: confirm_reuse_address_form
+  steps:
+    - action: utter_ask_reuse_ok
+
+- rule: Ask reuse_ok for damage confirm
+  condition:
+    - active_loop: confirm_reuse_damage_form
+  steps:
+    - action: utter_ask_reuse_ok
+# Ask for email in password reset form
+- rule: Ask for email during password reset
+  condition:
+    - active_loop: password_reset_form
+  steps:
+    - action: utter_ask_email
+
+# Ask for email in order lookup-by-email form
+- rule: Ask for lookup_email during order lookup by email
+  condition:
+    - active_loop: order_lookup_by_email_form
+  steps:
+    - action: utter_ask_email
+    # Ask for issue_description in damage report form
+- rule: Ask for issue description during damage report
+  condition:
+    - active_loop: damage_report_form
+  steps:
+    - action: utter_ask_issue_description
+# Ask for confirmation before cancel order
+- rule: Ask to confirm cancel during cancel order form
+  condition:
+    - active_loop: cancel_order_form
+  steps:
+    - action: utter_ask_confirm_cancel
+# Invalid email while in password_reset_form
+- rule: Invalid email during password reset
+  condition:
+    - active_loop: password_reset_form
+  steps:
+    - intent: nlu_fallback
+    - action: utter_email_invalid
+
+# Invalid email while in order_lookup_by_email_form
+- rule: Invalid email during lookup-by-email form
+  condition:
+    - active_loop: order_lookup_by_email_form
+  steps:
+    - intent: nlu_fallback
+    - action: utter_email_invalid
+# Invalid order ID while checking order status
+- rule: Invalid order ID during order status form
+  condition:
+    - active_loop: order_status_form
+  steps:
+    - intent: nlu_fallback
+    - action: utter_order_id_invalid
+
+# Invalid order ID while reporting damage
+- rule: Invalid order ID during damage report form
+  condition:
+    - active_loop: damage_report_form
+  steps:
+    - intent: nlu_fallback
+    - action: utter_order_id_invalid
+- rule: Activate password reset form
+  steps:
+    - intent: reset_password
+    - action: action_set_primary_intent
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: action_clear_context
+    - action: password_reset_form
+    - active_loop: password_reset_form
+- rule: No order ID for order status → look up by email
+  condition:
+    - active_loop: order_status_form
+  steps:
+    - intent: no_order_id
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_clear_context
+    - action: order_lookup_by_email_form
+    - active_loop: order_lookup_by_email_form
