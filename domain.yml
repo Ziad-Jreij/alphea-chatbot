@@ -25,6 +25,7 @@ intents:
   - out_of_scope_general
   - out_of_scope_personal_distress
   - faq_contact_channels
+  - give_conversation_feedback
 entities:
   - order_id
   - email
@@ -39,6 +40,13 @@ entities:
   - last_soft_affirmation_ts
 
 slots:
+  conversation_feedback:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: from_entity
+        entity: conversation_feedback
+        intent: give_feedback
     ################ DATASET 1 <|>
   export_done:
     type: bool
@@ -246,6 +254,20 @@ slots:
           - active_loop: damage_report_form
             requested_slot: issue_description
 responses:
+  #get conversation feedback via emojies
+  utter_ask_conversation_feedback:
+    - text: "Your feedback is incredibly important to us, how was this chat?"
+      buttons:
+        - title: "😡 Very bad"
+          payload: '/give_conversation_feedback{"conversation_feedback": "very_bad"}'
+        - title: "🙁 Bad"
+          payload: '/give_conversation_feedback{"conversation_feedback": "bad"}'
+        - title: "😐 Okay"
+          payload: '/give_conversation_feedback{"conversation_feedback": "neutral"}'
+        - title: "🙂 Good"
+          payload: '/give_conversation_feedback{"conversation_feedback": "good"}'
+        - title: "🤩 Excellent"
+          payload: '/give_conversation_feedback{"conversation_feedback": "excellent"}'
   # Main Conversation Responses
   utter_ack_positive_feedback:
     - text: >
@@ -350,9 +372,9 @@ responses:
 
   utter_ask_email:
     - text: "Sure thing! Just share the email you used for your order and I’ll track it down for you. 🔎🛍️"
-      buttons:
-        - title: "Use a different email"
-          payload: "/deny"
+      # buttons:
+      #   - title: "Use a different email"
+      #     payload: "/deny"
 
   utter_ask_issue_description:
     - text: >
@@ -527,6 +549,7 @@ actions:
   - action_set_primary_intent
   - action_export_conversation_summary
   - action_mark_fallback
+  - action_store_feedback_and_export
 
 forms:
   confirm_reuse_address_form:

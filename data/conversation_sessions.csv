@@ -1,4 +1,4 @@
-Session_ID,Start_time,User_intent,Resolution_Status,Final_Sentiment,Handoff_to_agent,total_messages,conversation_duration
-23036b169b174e63a6971009d7ae948c,2025-11-30T23:15:07.032275,start_return,unknown,neutral,no,5,21.528815269470215
-8a1531509c004f04b30eeabe1b2dcf63,2025-12-01T22:58:35.092498,start_return,unknown,negative,no,8,232.41446352005005
-71cb81d39a014d7aaa27769aa713a88a,2025-12-02T18:06:31.674995,ask_order_status,resolved,neutral,no,31,489.4125859737396
+Session_ID,Start_time,User_intent,Resolution_Status,Final_Sentiment,Handoff_to_agent,total_messages,conversation_duration,Conversation_Feedback
+a44c789b4b0d4635aa4c5da26d676c1a,2025-12-06T16:56:28.473498,shipping_times,resolved,neutral,no,13,102.95959639549255,not_provided
+9085628c9f9542ce81e1a458761480ea,2025-12-06T17:08:26.027575,report_damaged_product,resolved,neutral,no,15,72.1564621925354,not_provided
+a32c86bb1c0346d6bbc7580abec33393,2025-12-06T17:26:22.461353,start_return,resolved,neutral,no,13,66.72396278381348,not_provided

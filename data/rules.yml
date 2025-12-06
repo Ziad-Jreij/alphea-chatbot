@@ -132,6 +132,8 @@ rules:
     - action: order_status_form
     - active_loop: null
     - action: action_lookup_order_status
+    - action: utter_ask_conversation_feedback
+    - action: action_listen
 
 - rule: Submit password reset form
   condition:
@@ -140,6 +142,8 @@ rules:
     - action: password_reset_form
     - active_loop: null
     - action: action_password_reset
+    - action: utter_ask_conversation_feedback
+    - action: action_listen
 - rule: Activate return form
   steps:
     - intent: start_return
@@ -155,6 +159,8 @@ rules:
     - action: return_form
     - active_loop: null
     - action: action_start_return
+    - action: utter_ask_conversation_feedback
+    - action: action_listen
 
 - rule: Submit cancel order form
   condition:
@@ -163,6 +169,8 @@ rules:
     - action: cancel_order_form
     - active_loop: null
     - action: action_cancel_order
+    - action: utter_ask_conversation_feedback
+    - action: action_listen
 
 - rule: Submit address update form
   condition:
@@ -171,6 +179,8 @@ rules:
     - action: address_update_form
     - active_loop: null
     - action: action_update_address
+    - action: utter_ask_conversation_feedback
+    - action: action_listen
 - rule: Ask if user needs more help after a form
   condition:
     - active_loop: null
@@ -236,6 +246,75 @@ rules:
     - action: action_clear_context
     - action: order_lookup_by_email_form
     - active_loop: order_lookup_by_email_form
+  # --- Address update: no order ID → email lookup ---
+- rule: No order ID (address update) → look up by email
+  condition:
+    - active_loop: address_update_form
+  steps:
+    - intent: no_order_id
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_clear_context
+    - action: order_lookup_by_email_form
+    - active_loop: order_lookup_by_email_form
+
+# --- Order status: no order ID → email lookup ---
+- rule: No order ID (order status) → look up by email
+  condition:
+    - active_loop: order_status_form
+  steps:
+    - intent: no_order_id
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_clear_context
+    - action: order_lookup_by_email_form
+    - active_loop: order_lookup_by_email_form
+
+# --- Cancel order: no order ID → email lookup ---
+- rule: No order ID (cancel order) → look up by email
+  condition:
+    - active_loop: cancel_order_form
+  steps:
+    - intent: no_order_id
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_clear_context
+    - action: order_lookup_by_email_form
+    - active_loop: order_lookup_by_email_form
+
+# --- Damage report: no order ID → email lookup ---
+- rule: No order ID (damage report) → look up by email
+  condition:
+    - active_loop: damage_report_form
+  steps:
+    - intent: no_order_id
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_clear_context
+    - action: order_lookup_by_email_form
+    - active_loop: order_lookup_by_email_form
+
+# --- Return form: no order ID → email lookup ---
+- rule: No order ID (return form) → look up by email
+  condition:
+    - active_loop: return_form
+  steps:
+    - intent: no_order_id
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_clear_context
+    - action: order_lookup_by_email_form
+    - active_loop: order_lookup_by_email_form
 - rule: Submit email lookup form
   condition:
     - active_loop: order_lookup_by_email_form
@@ -256,6 +335,8 @@ rules:
     - action: damage_report_form
     - active_loop: null
     - action: action_record_damage_ticket   # your custom submit action
+    - action: utter_ask_conversation_feedback
+    - action: action_listen
 # ADDRESS UPDATE (has saved order)
 - rule: Address update with existing order → confirm reuse
   condition:
@@ -359,7 +440,11 @@ rules:
     - action: utter_crisis_help
     - action: utter_oos_personal_condolences
     - action: utter_welcome_menu
-
+- rule: Handle conversation feedback and export
+  steps:
+    - intent: give_conversation_feedback
+    - action: action_store_feedback_and_export
+    - action: action_listen
 - rule: Offer human handoff when potential escalation
   condition:
     - slot_was_set:

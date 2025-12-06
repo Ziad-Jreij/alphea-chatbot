@@ -326,7 +326,18 @@ class ActionEscalateNow(Action):
         dispatcher.utter_message(
             text="I’m escalating this to a human specialist right now. You’ll be connected shortly."
         )
-        return [SlotSet("resolution_status", "escalated")]
+
+        events: List[EventType] = [
+            SlotSet("resolution_status", "escalated"),
+            SlotSet("handoff_requested", True),
+        ]
+
+        export_events = ActionExportConversationSummary().run(
+            dispatcher, tracker, domain
+        )
+        events.extend(export_events)
+
+        return events
 class ActionOfferHandoff(Action):
     def name(self) -> Text:
         return "action_offer_handoff"
@@ -456,29 +467,78 @@ class ValidateDamageReportForm(FormValidationAction):
         out["issue_description"] = None
         return out
 class ActionCancelOrder(Action):
-    def name(self) -> Text: return "action_cancel_order"
+    def name(self) -> Text: 
+        return "action_cancel_order"
 
     def run(self, dispatcher, tracker, domain):
         oid = tracker.get_slot("order_id")
         confirm = tracker.get_slot("confirm_cancel")
+
+        # 1) Missing order ID → fallback + export
         if not oid:
             dispatcher.utter_message(text="I need the order ID to cancel.")
-            return [SlotSet("resolution_status", "fallback")]
+            events: List[EventType] = [SlotSet("resolution_status", "fallback")]
+            export_events = ActionExportConversationSummary().run(
+                dispatcher, tracker, domain
+            )
+            events.extend(export_events)
+            return events
+
+        # 2) User does NOT confirm → resolved + export
         if not confirm:
             dispatcher.utter_message(text="Okay, I’ll keep the order as is.")
-            return clear_context_slots() + [SlotSet("resolution_status", "resolved")]
+            events: List[EventType] = clear_context_slots() + [
+                SlotSet("resolution_status", "resolved")
+            ]
+            export_events = ActionExportConversationSummary().run(
+                dispatcher, tracker, domain
+            )
+            events.extend(export_events)
+            return events
+
         rec = ORDER_DB.get(oid)
+
+        # 3) Order not found → fallback + export
         if not rec:
             dispatcher.utter_message(text=f"Order {oid} not found.")
-            return clear_context_slots() + [SlotSet("resolution_status", "fallback")]
+            events: List[EventType] = clear_context_slots() + [
+                SlotSet("resolution_status", "fallback")
+            ]
+            export_events = ActionExportConversationSummary().run(
+                dispatcher, tracker, domain
+            )
+            events.extend(export_events)
+            return events
+
         created = datetime.fromisoformat(rec.get("created_at", "2025-10-01"))
+
+        # 4) Cannot cancel (too late / shipped) → fallback + export
         if rec["status"].lower() == "shipped" or datetime.now() - created > timedelta(hours=24):
             dispatcher.utter_message(
-                text=f"Order {oid} can’t be canceled now. You can start a return after delivery.")
-            return clear_context_slots() + [SlotSet("resolution_status", "fallback")]
+                text=f"Order {oid} can’t be canceled now. You can start a return after delivery."
+            )
+            events: List[EventType] = clear_context_slots() + [
+                SlotSet("resolution_status", "fallback")
+            ]
+            export_events = ActionExportConversationSummary().run(
+                dispatcher, tracker, domain
+            )
+            events.extend(export_events)
+            return events
+
+        # 5) Successfully canceled → resolved + export
         dispatcher.utter_message(
-            text=f"Order {oid} has been canceled and refunded. You’ll get your refund in 3–5 working days.")
-        return clear_context_slots() + [SlotSet("resolution_status", "resolved")]
+            text=f"Order {oid} has been canceled and refunded. You’ll get your refund in 3–5 working days."
+        )
+        events: List[EventType] = clear_context_slots() + [
+            SlotSet("resolution_status", "resolved")
+        ]
+        export_events = ActionExportConversationSummary().run(
+            dispatcher, tracker, domain
+        )
+        events.extend(export_events)
+        return events
+
 
 class ActionStartReturn(Action):
     def name(self) -> Text:
@@ -488,29 +548,40 @@ class ActionStartReturn(Action):
         oid = tracker.get_slot("order_id")
         reason = tracker.get_slot("return_reason")
 
+        # 1) Missing details → fallback + export
         if not oid or not reason:
             dispatcher.utter_message(text="I’m missing details for the return.")
-            return [SlotSet("resolution_status", "fallback")]
-
-        if oid not in ORDER_DB:
-            dispatcher.utter_message(text=f"Order {oid} not found.")
-            events = clear_context_slots()
-            # resolution in this case: failed / not_found (optional)
-            events.append(SlotSet("resolution_status", "not_found"))
-            export_events = ActionExportConversationSummary().run(dispatcher, tracker, domain)
+            events: List[EventType] = [SlotSet("resolution_status", "fallback")]
+            export_events = ActionExportConversationSummary().run(
+                dispatcher, tracker, domain
+            )
             events.extend(export_events)
             return events
 
-        dispatcher.utter_message(
-            text=f"Return initiated for {oid} (reason: {reason}). You’ll receive a label by email shortly.")
-        events = clear_context_slots()
-        events.append(SlotSet("resolution_status", "return_started"))
+        # 2) Order not found → fallback + export
+        if oid not in ORDER_DB:
+            dispatcher.utter_message(text=f"Order {oid} not found.")
+            events = clear_context_slots()
+            events.append(SlotSet("resolution_status", "fallback"))  # was "not_found"
+            export_events = ActionExportConversationSummary().run(
+                dispatcher, tracker, domain
+            )
+            events.extend(export_events)
+            return events
 
-        export_events = ActionExportConversationSummary().run(dispatcher, tracker, domain)
+        # 3) Successful return → resolved + export
+        dispatcher.utter_message(
+            text=f"Return initiated for {oid} (reason: {reason}). You’ll receive a label by email shortly."
+        )
+        events = clear_context_slots()
+        events.append(SlotSet("resolution_status", "resolved"))  # was "return_started"
+
+        export_events = ActionExportConversationSummary().run(
+            dispatcher, tracker, domain
+        )
         events.extend(export_events)
 
         return events
-
 # --- Actions ---
 class ActionLookupOrderStatusByEmail(Action):
     def name(self) -> Text:
@@ -518,31 +589,68 @@ class ActionLookupOrderStatusByEmail(Action):
 
     def run(self, dispatcher, tracker, domain):
         email = tracker.get_slot("lookup_email")
+
+        # Found order → resolved + export
         if email:
             dispatcher.utter_message(
                 text=f"Found your latest order via {email}: ORD-12345 — Shipped, ETA 2 days."
             )
-            return [SlotSet("lookup_email", None), SlotSet("resolution_status", "resolved")]
-        else:
-            dispatcher.utter_message(text="I couldn’t find any orders for that email.")
-            return [SlotSet("lookup_email", None), SlotSet("resolution_status", "fallback")]
+            events: List[EventType] = [
+                SlotSet("lookup_email", None),
+                SlotSet("resolution_status", "resolved"),
+            ]
+            export_events = ActionExportConversationSummary().run(
+                dispatcher, tracker, domain
+            )
+            events.extend(export_events)
+            return events
 
+        # Not found → fallback + export
+        dispatcher.utter_message(text="I couldn’t find any orders for that email.")
+        events = [
+            SlotSet("lookup_email", None),
+            SlotSet("resolution_status", "fallback"),
+        ]
+        export_events = ActionExportConversationSummary().run(
+            dispatcher, tracker, domain
+        )
+        events.extend(export_events)
+        return events
 class ActionPasswordReset(Action):
     def name(self) -> Text:
         return "action_password_reset"
 
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    def run(
+        self, 
+        dispatcher: CollectingDispatcher, 
+        tracker: Tracker, 
+        domain: Dict[Text, Any]
+    ) -> List[Dict[Text, Any]]:
         email = tracker.get_slot("email")
+
+        # Missing email → fallback + export
         if not email:
             dispatcher.utter_message(text="I need the account email to send a reset.")
-            return [SlotSet("resolution_status", "fallback")]
+            events: List[EventType] = [SlotSet("resolution_status", "fallback")]
+            export_events = ActionExportConversationSummary().run(
+                dispatcher, tracker, domain
+            )
+            events.extend(export_events)
+            return events
+
+        # Reset email sent → resolved + export
         dispatcher.utter_message(text=f"Got it. A password reset email has been sent to {email}.")
-        # clear context so future turns don't get hijacked
-        return [
+        events: List[EventType] = [
             SlotSet("issue_description", None),
             SlotSet("order_id", None),
             SlotSet("resolution_status", "resolved"),
         ]
+        export_events = ActionExportConversationSummary().run(
+            dispatcher, tracker, domain
+        )
+        events.extend(export_events)
+        return events
+
 class ActionRequestHandoff(Action):
     def name(self) -> Text: 
         return "action_request_handoff"
@@ -573,17 +681,48 @@ class ActionLookupOrderStatus(Action):
     def name(self) -> Text:
         return "action_lookup_order_status"
 
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    def run(
+        self, 
+        dispatcher: CollectingDispatcher, 
+        tracker: Tracker, 
+        domain: Dict[Text, Any]
+    ) -> List[Dict[Text, Any]]:
         order_id = tracker.get_slot("order_id")
+
+        # No order id → fallback + export
         if not order_id:
             dispatcher.utter_message(text="I couldn’t find an order ID. Please try again.")
-            return []
+            events: List[EventType] = [SlotSet("resolution_status", "fallback")]
+            export_events = ActionExportConversationSummary().run(
+                dispatcher, tracker, domain
+            )
+            events.extend(export_events)
+            return events
+
         rec = ORDER_DB.get(order_id)
+
+        # Not found → fallback + export
         if not rec:
-            dispatcher.utter_message(text=f"Sorry, I can’t find {order_id}. Double-check the ID (e.g., ORD-12345).")
-        else:
-            dispatcher.utter_message(text=f"Order {order_id}: {rec['status']} — ETA {rec['eta']}.")
-        return []
+            dispatcher.utter_message(
+                text=f"Sorry, I can’t find {order_id}. Double-check the ID (e.g., ORD-12345)."
+            )
+            events = [SlotSet("resolution_status", "fallback")]
+            export_events = ActionExportConversationSummary().run(
+                dispatcher, tracker, domain
+            )
+            events.extend(export_events)
+            return events
+
+        # Found → resolved + export
+        dispatcher.utter_message(
+            text=f"Order {order_id}: {rec['status']} — ETA {rec['eta']}."
+        )
+        events = [SlotSet("resolution_status", "resolved")]
+        export_events = ActionExportConversationSummary().run(
+            dispatcher, tracker, domain
+        )
+        events.extend(export_events)
+        return events
 
 # --- Validators ---
 class ValidateOrderStatusForm(FormValidationAction):
@@ -632,20 +771,33 @@ class ActionRecordDamageTicket(Action):
         order_id = tracker.get_slot("order_id")
         desc = tracker.get_slot("issue_description")
 
+        # Missing details → fallback + export
         if not order_id or not desc:
             dispatcher.utter_message(
                 text="I’m missing some details. Please provide the order ID and a short description."
             )
-            return [SlotSet("resolution_status", "fallback")]
+            events: List[EventType] = [SlotSet("resolution_status", "fallback")]
+            export_events = ActionExportConversationSummary().run(
+                dispatcher, tracker, domain
+            )
+            events.extend(export_events)
+            return events
 
+        # Ticket created → resolved + export
         dispatcher.utter_message(
             text=f"Ticket created for {order_id}: '{desc}'. A support agent will follow up shortly."
         )
-        return [
+        events: List[EventType] = [
             SlotSet("issue_description", None),
             SlotSet("order_id", None),
             SlotSet("resolution_status", "resolved"),
         ]
+        export_events = ActionExportConversationSummary().run(
+            dispatcher, tracker, domain
+        )
+        events.extend(export_events)
+        return events
+
 
 class ActionSessionStart(Action):
     def name(self) -> Text:
@@ -657,20 +809,41 @@ class ActionSessionStart(Action):
         tracker: Tracker,
         domain: DomainDict,
     ) -> List[EventType]:
-        # record current UTC as session start
+        """Initialise analytics and conv-risk slots for each new session."""
+
         now = datetime.utcnow().isoformat()
 
-        logger.info("[session] start session_id=%s at %s", tracker.sender_id, now)
-
-        return [
+        events: List[EventType] = [
             SessionStarted(),
-            ActionExecuted("action_listen"),
             SlotSet("session_start_time", now),
+
+            # reset export guard
+            SlotSet("export_done", False),
+
+            # reset high-level outcome slots
             SlotSet("primary_intent", None),
             SlotSet("resolution_status", None),
             SlotSet("final_sentiment", None),
             SlotSet("handoff_requested", False),
+
+            # reset conversation-level risk
+            SlotSet("conversation_criticality", "low"),
+            SlotSet("conversation_criticality_score", 0.0),
+            SlotSet("conversation_escalation", "none"),
+            SlotSet("criticality_history", []),
+            SlotSet("criticality_tally", {}),
+
+            # reset emotion aggregates
+            SlotSet("emotion_tally", {}),
+            SlotSet("emotion_history", []),
+            SlotSet("overall_emotion", None),
+            SlotSet("top_emotion", None),
+            SlotSet("sentiment", None),
         ]
+
+        # let Rasa listen for the first user message of the new session
+        events.append(ActionExecuted("action_listen"))
+        return events
 class ActionSetPrimaryIntent(Action):
     def name(self) -> Text:
         return "action_set_primary_intent"
@@ -978,16 +1151,14 @@ class ActionExportConversationSummary(Action):
         domain: DomainDict,
     ) -> List[EventType]:
 
-        # --- guard: if we've already exported this session, do nothing ---
-        if tracker.get_slot("export_done"):
-            logger.info("[dataset] export already done for this session; skipping.")
-            return []
-
         session_id = tracker.sender_id
         start_time = tracker.get_slot("session_start_time")
         primary_intent = tracker.get_slot("primary_intent") or "unknown"
         resolution_status = tracker.get_slot("resolution_status") or "unknown"
         conv_level = tracker.get_slot("conversation_criticality")
+
+        # feedback slot (may be None if user didn't answer yet)
+        conversation_feedback = tracker.get_slot("conversation_feedback") or "not_provided"
 
         # if final_sentiment not set yet, derive from conversation criticality
         final_sentiment = tracker.get_slot("final_sentiment") or _final_sentiment_from_conv_crit(conv_level)
@@ -1028,11 +1199,11 @@ class ActionExportConversationSummary(Action):
             "Handoff_to_agent": "yes" if handoff else "no",
             "total_messages": total_messages,
             "conversation_duration": duration_seconds,
+            "Conversation_Feedback": conversation_feedback,
         }
 
         logger.info("[dataset] row=%s", row)
 
-        # --- append to CSV file (once, with header if needed) ---
         csv_path = os.path.join("data", "conversation_sessions.csv")
         os.makedirs(os.path.dirname(csv_path), exist_ok=True)
 
@@ -1045,17 +1216,27 @@ class ActionExportConversationSummary(Action):
             "Handoff_to_agent",
             "total_messages",
             "conversation_duration",
+            "Conversation_Feedback",
         ]
 
-        file_exists = os.path.exists(csv_path)
+        # --- read existing rows, drop any old row for this session, and rewrite file ---
+        existing_rows = []
+        if os.path.exists(csv_path):
+            with open(csv_path, mode="r", newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for r in reader:
+                    if r.get("Session_ID") != session_id:
+                        existing_rows.append(r)
 
-        with open(csv_path, mode="a", newline="", encoding="utf-8") as f:
+        # add/replace current row for this session
+        existing_rows.append(row)
+
+        with open(csv_path, mode="w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
-            if not file_exists:
-                writer.writeheader()
-            writer.writerow(row)
+            writer.writeheader()
+            writer.writerows(existing_rows)
 
-        # mark export as done + persist final_sentiment
+        # mark that export happened at least once
         return [
             SlotSet("final_sentiment", final_sentiment),
             SlotSet("export_done", True),
@@ -1070,27 +1251,85 @@ class ActionMarkFallback(Action):
             return [SlotSet("resolution_status", "fallback")]
         return []
 class ActionUpdateAddress(Action):
-    def name(self) -> Text: return "action_update_address"
+    def name(self) -> Text: 
+        return "action_update_address"
 
     def run(self, dispatcher, tracker, domain):
         oid = tracker.get_slot("order_id")
         addr = tracker.get_slot("new_address")
 
+        # Missing data → fallback + export
         if not oid or not addr:
             dispatcher.utter_message(text="I need both the order ID and the new address.")
-            return [SlotSet("resolution_status", "fallback")]
+            events: List[EventType] = [SlotSet("resolution_status", "fallback")]
+            export_events = ActionExportConversationSummary().run(
+                dispatcher, tracker, domain
+            )
+            events.extend(export_events)
+            return events
 
         rec = ORDER_DB.get(oid)
+
+        # Order not found → fallback + export
         if not rec:
             dispatcher.utter_message(text=f"Order {oid} not found.")
-            return clear_context_slots() + [SlotSet("resolution_status", "fallback")]
+            events = clear_context_slots() + [SlotSet("resolution_status", "fallback")]
+            export_events = ActionExportConversationSummary().run(
+                dispatcher, tracker, domain
+            )
+            events.extend(export_events)
+            return events
 
+        # Shipped: cannot update → fallback + export
         if rec["status"].lower() == "shipped":
             dispatcher.utter_message(
                 text=f"Order {oid} already shipped; I can’t change the address. Try carrier redirect."
             )
-            return clear_context_slots() + [SlotSet("resolution_status", "fallback")]
+            events = clear_context_slots() + [SlotSet("resolution_status", "fallback")]
+            export_events = ActionExportConversationSummary().run(
+                dispatcher, tracker, domain
+            )
+            events.extend(export_events)
+            return events
 
+        # Successfully updated → resolved + export
         rec["address"] = addr
         dispatcher.utter_message(text=f"Address for {oid} updated to: {addr}.")
-        return clear_context_slots() + [SlotSet("resolution_status", "resolved")]
+        events = clear_context_slots() + [SlotSet("resolution_status", "resolved")]
+        export_events = ActionExportConversationSummary().run(
+            dispatcher, tracker, domain
+        )
+        events.extend(export_events)
+        return events
+class ActionStoreFeedbackAndExport(Action):
+    def name(self) -> Text:
+        return "action_store_feedback_and_export"
+
+    def run(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> List[EventType]:
+
+        feedback = tracker.get_slot("conversation_feedback")
+
+        logger.info(
+            "[feedback] session_id=%s feedback_slot=%r intent=%s",
+            tracker.sender_id,
+            feedback,
+            tracker.latest_message.get("intent", {}).get("name"),
+        )
+
+        if feedback and feedback != "not_provided":
+            dispatcher.utter_message(text="Thanks for your feedback! ")
+        else:
+            dispatcher.utter_message(text="Thanks for chatting with us! ")
+
+        # IMPORTANT: this will now overwrite any previous row for this session
+        export_events = ActionExportConversationSummary().run(
+            dispatcher, tracker, domain
+        )
+
+        return export_events
+
