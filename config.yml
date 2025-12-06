@@ -28,8 +28,8 @@ pipeline:
 
   - name: components.criticality.CriticalityZeroShotComponent
     model_name: "facebook/bart-large-mnli"   
-    hypothesis_template: "The customer's support request is {}."
-    labels: ["not urgent and can wait", "moderately urgent and should be handled soon", "very urgent and needs immediate attention"]
+    hypothesis_template: "This support request is {}."
+    labels: ["low urgency", "medium urgency", "high urgency"]
     boost_from_emotion: true
     heuristics_enabled: true
     gpu: false     

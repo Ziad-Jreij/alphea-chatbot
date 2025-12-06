@@ -1,3 +1,4 @@
 Session_ID,Start_time,User_intent,Resolution_Status,Final_Sentiment,Handoff_to_agent,total_messages,conversation_duration
 23036b169b174e63a6971009d7ae948c,2025-11-30T23:15:07.032275,start_return,unknown,neutral,no,5,21.528815269470215
 8a1531509c004f04b30eeabe1b2dcf63,2025-12-01T22:58:35.092498,start_return,unknown,negative,no,8,232.41446352005005
+71cb81d39a014d7aaa27769aa713a88a,2025-12-02T18:06:31.674995,ask_order_status,resolved,neutral,no,31,489.4125859737396

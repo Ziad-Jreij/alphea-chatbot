@@ -60,7 +60,7 @@ EMAIL_RE = re.compile(r"[^@]+@[^@]+\.[^@]+")
 
 logger = logging.getLogger(__name__)
 
-_CRIT2SCORE = {"low": 0.2, "medium": 0.6, "high": 0.9}
+_CRIT2SCORE = {"low": 0.3, "medium": 0.5, "high": 0.75}
 _SCORE2CRIT = lambda s: ("high" if s>=0.65 else "medium" if s>=0.45 else "low")
 _ESCALATION_MAP = {"low":"none","medium":"potential","high":"escalate_now"}
 def _final_sentiment_from_conv_crit(conv_level: Optional[str]) -> str:
@@ -477,7 +477,7 @@ class ActionCancelOrder(Action):
                 text=f"Order {oid} can’t be canceled now. You can start a return after delivery.")
             return clear_context_slots() + [SlotSet("resolution_status", "fallback")]
         dispatcher.utter_message(
-            text=f"Order {oid} has been canceled and refunded. You’ll see the refund in 3–5 days.")
+            text=f"Order {oid} has been canceled and refunded. You’ll get your refund in 3–5 working days.")
         return clear_context_slots() + [SlotSet("resolution_status", "resolved")]
 
 class ActionStartReturn(Action):
@@ -569,7 +569,21 @@ class ActionClearContext(Action):
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         return clear_context_slots() + [SlotSet("emotion_tally", None), SlotSet("overall_emotion", None)]
+class ActionLookupOrderStatus(Action):
+    def name(self) -> Text:
+        return "action_lookup_order_status"
 
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        order_id = tracker.get_slot("order_id")
+        if not order_id:
+            dispatcher.utter_message(text="I couldn’t find an order ID. Please try again.")
+            return []
+        rec = ORDER_DB.get(order_id)
+        if not rec:
+            dispatcher.utter_message(text=f"Sorry, I can’t find {order_id}. Double-check the ID (e.g., ORD-12345).")
+        else:
+            dispatcher.utter_message(text=f"Order {order_id}: {rec['status']} — ETA {rec['eta']}.")
+        return []
 
 # --- Validators ---
 class ValidateOrderStatusForm(FormValidationAction):

@@ -225,7 +225,17 @@ rules:
     - action: action_clear_context
     - action: order_lookup_by_email_form
     - active_loop: order_lookup_by_email_form
-
+- rule: No order ID for order status → look up by email
+  condition:
+    - active_loop: order_status_form
+  steps:
+    - slot_was_set:
+        - order_id: null
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_clear_context
+    - action: order_lookup_by_email_form
+    - active_loop: order_lookup_by_email_form
 - rule: Submit email lookup form
   condition:
     - active_loop: order_lookup_by_email_form
@@ -482,13 +492,50 @@ rules:
     - action: action_clear_context
     - action: password_reset_form
     - active_loop: password_reset_form
-- rule: No order ID for order status → look up by email
-  condition:
-    - active_loop: order_status_form
+# After order status is resolved or failed
+- rule: Export summary after order lookup
   steps:
-    - intent: no_order_id
-    - action: action_deactivate_loop
-    - active_loop: null
-    - action: action_clear_context
-    - action: order_lookup_by_email_form
-    - active_loop: order_lookup_by_email_form
+    - action: action_lookup_order_status
+    - action: action_export_conversation_summary
+
+# After order lookup by email
+- rule: Export summary after order lookup by email
+  steps:
+    - action: action_lookup_order_status_by_email
+    - action: action_export_conversation_summary
+
+# After password reset flow
+- rule: Export summary after password reset
+  steps:
+    - action: action_password_reset
+    - action: action_export_conversation_summary
+
+# After return flow
+- rule: Export summary after start_return
+  steps:
+    - action: action_start_return
+    - action: action_export_conversation_summary
+
+# After cancel order flow
+- rule: Export summary after cancel order
+  steps:
+    - action: action_cancel_order
+    - action: action_export_conversation_summary
+
+# After address update
+- rule: Export summary after address update
+  steps:
+    - action: action_update_address
+    - action: action_export_conversation_summary
+
+# After damage report / ticket creation
+- rule: Export summary after damage report
+  steps:
+    - action: action_record_damage_ticket
+    - action: action_export_conversation_summary
+
+# After escalation to human
+- rule: Export summary after escalation
+  steps:
+    - action: action_escalate_now
+    - action: action_export_conversation_summary

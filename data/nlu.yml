@@ -315,7 +315,6 @@ nlu:
 - intent: no_order_id
   examples: |
     - I don't have it
-    - I don’t have it
     - I lost my order id
     - I don't know my order id
 - intent: product_feedback_positive

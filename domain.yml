@@ -36,6 +36,7 @@ entities:
   - criticality_level
   - criticality_score
   - escalation
+  - last_soft_affirmation_ts
 
 slots:
     ################ DATASET 1 <|>
@@ -80,7 +81,9 @@ slots:
   sentiment:
     type: text
     influence_conversation: true
-    mappings: [{ type: custom }]
+    mappings:
+      - type: from_entity
+        entity: sentiment
   emotion_history:
     type: list            
     influence_conversation: false
@@ -88,7 +91,9 @@ slots:
   top_emotion:
     type: text
     influence_conversation: true
-    mappings: [{ type: custom }]
+    mappings:
+      - type: from_entity
+        entity: top_emotion
   criticality_level:
     type: categorical
     values:
@@ -161,13 +166,16 @@ slots:
             requested_slot: order_id
           - active_loop: damage_report_form
             requested_slot: order_id
-
+      - type: from_intent
+        value: "NO_ORDER_ID"
+        intent: no_order_id
+        conditions:
+          - active_loop: order_status_form
+            requested_slot: order_id
   reuse_ok:
     type: categorical
     values: ["yes", "no"]
-    influence_conversation: false
     mappings:
-      # let the form ask it; we validate yes/no from text or buttons
       - type: from_text
         conditions:
           - active_loop: confirm_reuse_address_form
@@ -341,7 +349,7 @@ responses:
           payload: "/no_order_id"
 
   utter_ask_email:
-    - text: "Which email address is linked to your account or order?"
+    - text: "Sure thing! Just share the email you used for your order and I’ll track it down for you. 🔎🛍️"
       buttons:
         - title: "Use a different email"
           payload: "/deny"
@@ -423,13 +431,13 @@ responses:
           payload: "/talk_to_human"
 
   utter_faq_contact_channels:
-    - text: >
-        You can reach our support team in several ways:
-        • Live chat: 09:00–18:00 EET  
-        • Email: support@company.com  
-        • Phone: +357-XXXXXXX  
+    - text: 
+        "You can reach our support team in several ways:\n
+        • Live chat: 09:00–18:00 EET \n 
+        • Email: support@company.com  \n 
+        • Phone: +357-XXXXXXX  \n
 
-        If you tell me what you need, I can also try to handle it directly here in the chat.
+        If you tell me what you need, I can also try to handle it directly here in the chat."
 
   utter_store_hours:
     - text: >
