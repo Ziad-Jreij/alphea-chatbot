@@ -38,6 +38,7 @@ entities:
   - criticality_score
   - escalation
   - last_soft_affirmation_ts
+  - conversation_feedback
 
 slots:
   conversation_feedback:
@@ -46,7 +47,7 @@ slots:
     mappings:
       - type: from_entity
         entity: conversation_feedback
-        intent: give_feedback
+        intent: give_conversation_feedback
     ################ DATASET 1 <|>
   export_done:
     type: bool

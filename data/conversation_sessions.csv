@@ -2,3 +2,6 @@ Session_ID,Start_time,User_intent,Resolution_Status,Final_Sentiment,Handoff_to_a
 a44c789b4b0d4635aa4c5da26d676c1a,2025-12-06T16:56:28.473498,shipping_times,resolved,neutral,no,13,102.95959639549255,not_provided
 9085628c9f9542ce81e1a458761480ea,2025-12-06T17:08:26.027575,report_damaged_product,resolved,neutral,no,15,72.1564621925354,not_provided
 a32c86bb1c0346d6bbc7580abec33393,2025-12-06T17:26:22.461353,start_return,resolved,neutral,no,13,66.72396278381348,not_provided
+42d2597e5a024c0c91284c00d9e2cb45,2025-12-06T18:46:50.959826,update_address,fallback,neutral,no,8,30.47611904144287,not_provided
+f2611950f38048eb9acf729fcfac2b49,2025-12-06T18:57:41.170619,start_return,resolved,neutral,no,11,36.06848740577698,not_provided
+eb2c030b7b0b480ebca72926c0a062c0,2025-12-06T19:09:27.016425,cancel_order,resolved,neutral,no,11,31.867875337600708,excellent

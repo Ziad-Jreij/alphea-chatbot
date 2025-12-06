@@ -1156,9 +1156,11 @@ class ActionExportConversationSummary(Action):
         primary_intent = tracker.get_slot("primary_intent") or "unknown"
         resolution_status = tracker.get_slot("resolution_status") or "unknown"
         conv_level = tracker.get_slot("conversation_criticality")
-
+        conversation_feedback = "not_provided"
         # feedback slot (may be None if user didn't answer yet)
-        conversation_feedback = tracker.get_slot("conversation_feedback") or "not_provided"
+        if tracker.get_slot("conversation_feedback"):
+            conversation_feedback = tracker.get_slot("conversation_feedback")
+        #conversation_feedback = tracker.get_slot("conversation_feedback") or "not_provided"
 
         # if final_sentiment not set yet, derive from conversation criticality
         final_sentiment = tracker.get_slot("final_sentiment") or _final_sentiment_from_conv_crit(conv_level)
