@@ -64,6 +64,15 @@ logger = logging.getLogger(__name__)
 _CRIT2SCORE = {"low": 0.3, "medium": 0.5, "high": 0.75}
 _SCORE2CRIT = lambda s: ("high" if s>=0.65 else "medium" if s>=0.45 else "low")
 _ESCALATION_MAP = {"low":"none","medium":"potential","high":"escalate_now"}
+ABSA_ENABLED_INTENTS = {
+    "product_feedback_positive",
+    "product_feedback_negative",
+    "report_damaged_product",
+    "start_return",
+    "cancel_order",
+    "refund_policy",
+    "shipping_times",
+}
 def _final_sentiment_from_conv_crit(conv_level: Optional[str]) -> str:
     level = (conv_level or "medium").lower()
     if level == "low":
@@ -90,7 +99,9 @@ def _infer_emotion_slots(tracker):
       - top_emotion / sentiment / overall_emotion
       - criticality_level / criticality_score / escalation
       - conversation_criticality / conversation_criticality_score / conversation_escalation
-      - ABSA aspect-based sentiment analytics (second dataset)
+
+    ABSA (aspect-based sentiment) is run for every user turn, but rows are only
+    exported if the message contains known aspect terms.
     """
     text = (tracker.latest_message.get("text") or "").strip()
     if not text:
@@ -118,9 +129,10 @@ def _infer_emotion_slots(tracker):
     conv_state = _update_conversation_risk(tracker, level, score)
 
     logger.info(
-        "[form-emotion+crit] text=%r -> emo=%s sentiment=%s overall=%s | "
+        "[form-emotion+crit] text=%r intent=%s -> emo=%s sentiment=%s overall=%s | "
         "crit_level=%s crit_score=%.2f crit_escalation=%s | conv=%s",
         text,
+        intent,
         top_label,
         sentiment,
         overall,
@@ -134,12 +146,11 @@ def _infer_emotion_slots(tracker):
         },
     )
 
-    # 4) ABSA: aspect-based sentiment for this exact user message
+    # 4) ABSA: always run; extractor will decide whether to export
     try:
         _infer_absa_for_latest_user_turn(
             tracker=tracker,
             text=text,
-            intent=intent,
             emotion_label=top_label,
             sentiment_label=sentiment,
         )
@@ -311,8 +322,8 @@ def _build_absa_rows_for_message(
     Convert aspect-opinion extraction results + current message into CSV rows.
 
     Dataset schema:
-      Session_ID, Original_Text, Aspect, Opinion_Term,
-      Aspect_Sentiment, Aspect_Sentiment_Confidence, Category, Emotion
+      Session_ID, Original_Text, Aspect, Aspect_Term, Opinion_Term,
+      Aspect_Sentiment, Confidence, Category, Emotion
     """
     original_text = (text or "").strip()
     if not original_text or not aspects:
@@ -326,16 +337,20 @@ def _build_absa_rows_for_message(
             {
                 "Session_ID": session_id,
                 "Original_Text": original_text,
-                "Aspect": a.get("aspect_term") or a.get("aspect"),
+                # canonical name from ASPECT_SPECS["name"]
+                "Aspect": a.get("aspect"),
+                # surface phrase from the message
+                "Aspect_Term": a.get("aspect_term"),
                 "Opinion_Term": a.get("opinion_term"),
                 "Aspect_Sentiment": a.get("aspect_sentiment"),
-                "Aspect_Sentiment_Confidence": a.get("aspect_sentiment_confidence"),
+                "Confidence": a.get("aspect_sentiment_confidence"),
                 "Category": a.get("aspect_category"),
                 "Emotion": emotion_label,
             }
         )
 
     return rows
+
 def _export_absa_rows(rows: List[Dict[str, Any]]) -> None:
     """
     Append ABSA rows to data/aspect_sentiment_sessions.csv, deduplicating by
@@ -345,7 +360,6 @@ def _export_absa_rows(rows: List[Dict[str, Any]]) -> None:
         logger.info("[ABSA] No rows to export, skipping CSV write")
         return
 
-    # Resolve path relative to the actions.py file (project root-ish)
     base_dir = Path(os.path.dirname(os.path.abspath(__file__))).parent
     csv_path = base_dir / "data" / "aspect_sentiment_sessions.csv"
 
@@ -391,21 +405,14 @@ def _export_absa_rows(rows: List[Dict[str, Any]]) -> None:
         for r in new_unique_rows:
             writer.writerow(r)
 
-    logger.info("[ABSA] CSV write complete: %d existing + %d new rows",
-                len(existing_rows), len(new_unique_rows))
-
-    with csv_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for r in existing_rows:
-            writer.writerow(r)
-        for r in new_unique_rows:
-            writer.writerow(r)
-
+    logger.info(
+        "[ABSA] CSV write complete: %d existing + %d new rows",
+        len(existing_rows),
+        len(new_unique_rows),
+    )
 def _infer_absa_for_latest_user_turn(
     tracker: Tracker,
     text: str,
-    intent: Optional[str],
     emotion_label: Optional[str],
     sentiment_label: Optional[str],
 ) -> None:
@@ -413,13 +420,13 @@ def _infer_absa_for_latest_user_turn(
     if not text:
         return
 
-    # currently we ignore 'intent' on purpose (you'll refine sentiment later)
     aspects = extract_aspect_opinions(
         text=text,
         sentiment_label=sentiment_label,
         emotion_label=emotion_label,
     )
     if not aspects:
+        logger.debug("[ABSA] No aspects found in text=%r, skipping export", text)
         return
 
     rows = _build_absa_rows_for_message(
