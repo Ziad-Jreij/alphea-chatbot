@@ -12,7 +12,8 @@ from threading import Lock
 from components.emotion import ensure_emotion_pipe, coarse_from_label, top_emotion 
 from components.criticality import infer_criticality_for_text
 from datetime import datetime, timedelta
-
+from pathlib import Path
+from components.absa import extract_aspect_opinions
 NOW = datetime.now()
 _init_lock = Lock()
 # Fake database for demo
@@ -89,10 +90,13 @@ def _infer_emotion_slots(tracker):
       - top_emotion / sentiment / overall_emotion
       - criticality_level / criticality_score / escalation
       - conversation_criticality / conversation_criticality_score / conversation_escalation
+      - ABSA aspect-based sentiment analytics (second dataset)
     """
     text = (tracker.latest_message.get("text") or "").strip()
     if not text:
         return {}
+
+    intent = tracker.latest_message.get("intent", {}).get("name")
 
     # 1) Emotion
     pipe = _ensure_pipe()
@@ -129,6 +133,18 @@ def _infer_emotion_slots(tracker):
             "conversation_escalation": conv_state["conversation_escalation"],
         },
     )
+
+    # 4) ABSA: aspect-based sentiment for this exact user message
+    try:
+        _infer_absa_for_latest_user_turn(
+            tracker=tracker,
+            text=text,
+            intent=intent,
+            emotion_label=top_label,
+            sentiment_label=sentiment,
+        )
+    except Exception as e:
+        logger.exception("ABSA analysis failed: %s", e)
 
     out = {
         # emotion
@@ -284,6 +300,138 @@ def _merge_emotion_aggregate(tracker, new_label):
         "emotion_history": history,
         "overall_emotion": overall,
     }
+#ABSA #############HELPER FUNCTIONS#####################
+def _build_absa_rows_for_message(
+    tracker: Tracker,
+    text: str,
+    aspects: List[Dict[str, Any]],
+    emotion_label: Optional[str],
+) -> List[Dict[str, Any]]:
+    """
+    Convert aspect-opinion extraction results + current message into CSV rows.
+
+    Dataset schema:
+      Session_ID, Original_Text, Aspect, Opinion_Term,
+      Aspect_Sentiment, Aspect_Sentiment_Confidence, Category, Emotion
+    """
+    original_text = (text or "").strip()
+    if not original_text or not aspects:
+        return []
+
+    session_id = tracker.sender_id
+
+    rows: List[Dict[str, Any]] = []
+    for a in aspects:
+        rows.append(
+            {
+                "Session_ID": session_id,
+                "Original_Text": original_text,
+                "Aspect": a.get("aspect_term") or a.get("aspect"),
+                "Opinion_Term": a.get("opinion_term"),
+                "Aspect_Sentiment": a.get("aspect_sentiment"),
+                "Aspect_Sentiment_Confidence": a.get("aspect_sentiment_confidence"),
+                "Category": a.get("aspect_category"),
+                "Emotion": emotion_label,
+            }
+        )
+
+    return rows
+def _export_absa_rows(rows: List[Dict[str, Any]]) -> None:
+    """
+    Append ABSA rows to data/aspect_sentiment_sessions.csv, deduplicating by
+    (Session_ID, Original_Text, Aspect, Opinion_Term).
+    """
+    if not rows:
+        logger.info("[ABSA] No rows to export, skipping CSV write")
+        return
+
+    # Resolve path relative to the actions.py file (project root-ish)
+    base_dir = Path(os.path.dirname(os.path.abspath(__file__))).parent
+    csv_path = base_dir / "data" / "aspect_sentiment_sessions.csv"
+
+    logger.info("[ABSA] Exporting %d rows to %s", len(rows), csv_path)
+
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fieldnames = list(rows[0].keys())
+
+    existing_rows: List[Dict[str, Any]] = []
+    existing_keys = set()
+
+    if csv_path.exists():
+        with csv_path.open("r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                existing_rows.append(r)
+                key = (
+                    r.get("Session_ID"),
+                    r.get("Original_Text"),
+                    r.get("Aspect"),
+                    r.get("Opinion_Term"),
+                )
+                existing_keys.add(key)
+
+    new_unique_rows: List[Dict[str, Any]] = []
+    for r in rows:
+        key = (
+            r.get("Session_ID"),
+            r.get("Original_Text"),
+            r.get("Aspect"),
+            r.get("Opinion_Term"),
+        )
+        if key not in existing_keys:
+            existing_keys.add(key)
+            new_unique_rows.append(r)
+
+    with csv_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for r in existing_rows:
+            writer.writerow(r)
+        for r in new_unique_rows:
+            writer.writerow(r)
+
+    logger.info("[ABSA] CSV write complete: %d existing + %d new rows",
+                len(existing_rows), len(new_unique_rows))
+
+    with csv_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for r in existing_rows:
+            writer.writerow(r)
+        for r in new_unique_rows:
+            writer.writerow(r)
+
+def _infer_absa_for_latest_user_turn(
+    tracker: Tracker,
+    text: str,
+    intent: Optional[str],
+    emotion_label: Optional[str],
+    sentiment_label: Optional[str],
+) -> None:
+    text = (text or "").strip()
+    if not text:
+        return
+
+    # currently we ignore 'intent' on purpose (you'll refine sentiment later)
+    aspects = extract_aspect_opinions(
+        text=text,
+        sentiment_label=sentiment_label,
+        emotion_label=emotion_label,
+    )
+    if not aspects:
+        return
+
+    rows = _build_absa_rows_for_message(
+        tracker=tracker,
+        text=text,
+        aspects=aspects,
+        emotion_label=emotion_label,
+    )
+    _export_absa_rows(rows)
+
+
+############################################
 class ActionUpdateConversationRisk(Action):
     def name(self) -> str: 
         return "action_update_conversation_risk"
@@ -1200,7 +1348,7 @@ class ActionExportConversationSummary(Action):
             "Final_Sentiment": final_sentiment,
             "Handoff_to_agent": "yes" if handoff else "no",
             "total_messages": total_messages,
-            "conversation_duration": duration_seconds,
+            "conversation_duration": round(duration_seconds),
             "Conversation_Feedback": conversation_feedback,
         }
 

@@ -1,0 +1,7 @@
+Session_ID,Original_Text,Aspect,Opinion_Term,Aspect_Sentiment,Aspect_Sentiment_Confidence,Category,Emotion
+e3b600d2e4a34d0bad9089d5c92945c1,"The battery life is fantastic, but the camera is just average.",battery life,fantastic,positive,0.95,Performance,curiosity
+e3b600d2e4a34d0bad9089d5c92945c1,"The battery life is fantastic, but the camera is just average.",camera,fantastic,positive,0.95,Features,curiosity
+2a10876d7ab54c23877eadd8736d54b4,"The battery life is fantastic, but the camera is just average.",battery life,fantastic,positive,0.95,Performance,curiosity
+2a10876d7ab54c23877eadd8736d54b4,"The battery life is fantastic, but the camera is just average.",camera,just average,neutral,0.95,Features,curiosity
+c77ca7ee781441658cb046404e66a5bc,"I love the new design, though the price is a little too high.",design,too high,negative,0.95,Aesthetics,admiration
+c77ca7ee781441658cb046404e66a5bc,"I love the new design, though the price is a little too high.",price,too high,negative,0.95,Cost,admiration
