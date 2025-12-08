@@ -235,31 +235,6 @@ rules:
     - action: action_clear_context
     - action: order_lookup_by_email_form
     - active_loop: order_lookup_by_email_form
-- rule: No order ID for order status → look up by email
-  condition:
-    - active_loop: order_status_form
-  steps:
-    - slot_was_set:
-        - order_id: null
-    - action: action_deactivate_loop
-    - active_loop: null
-    - action: action_clear_context
-    - action: order_lookup_by_email_form
-    - active_loop: order_lookup_by_email_form
-  # --- Address update: no order ID → email lookup ---
-- rule: No order ID (address update) → look up by email
-  condition:
-    - active_loop: address_update_form
-  steps:
-    - intent: no_order_id
-    - action: action_infer_emotion
-    - action: action_update_conversation_risk
-    - action: action_deactivate_loop
-    - active_loop: null
-    - action: action_clear_context
-    - action: order_lookup_by_email_form
-    - active_loop: order_lookup_by_email_form
-
 # --- Order status: no order ID → email lookup ---
 - rule: No order ID (order status) → look up by email
   condition:
@@ -302,8 +277,8 @@ rules:
     - action: order_lookup_by_email_form
     - active_loop: order_lookup_by_email_form
 
-# --- Return form: no order ID → email lookup ---
-- rule: No order ID (return form) → look up by email
+# Return form: switch to email lookup
+- rule: Return → no order ID → look up by email
   condition:
     - active_loop: return_form
   steps:

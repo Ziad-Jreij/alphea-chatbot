@@ -585,24 +585,46 @@ class ValidateDamageReportForm(FormValidationAction):
         return "validate_damage_report_form"
 
     def validate_order_id(
-        self, value: Text, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
+        self,
+        value: Text,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
     ) -> Dict[Text, Any]:
-        out = _infer_emotion_slots(tracker)  # ← always add emotion
-        # Only validate when this slot is being asked
+        """
+        Validates the order ID during the return form.
+        Handles: valid IDs, reuse of previous ID, and "I don't have it".
+        Also updates emotion + conv-risk for this turn.
+        """
+        out = _infer_emotion_slots(tracker)  # ← emotion + criticality + conv-risk
+
+        # If this slot is not actively requested, just keep the current value
         if tracker.get_slot("requested_slot") != "order_id":
             out["order_id"] = tracker.get_slot("order_id")
             return out
 
         if not value:
-            out["order_id"] = None
+            previous_id = tracker.get_slot("order_id")
+            if previous_id:
+                dispatcher.utter_message(text=f"Got it — we’ll use your previous order ID ({previous_id}).")
+                out["order_id"] = previous_id
+                return out
+            else:
+                dispatcher.utter_message(text="No worries, kindly provide your order ID (e.g., ORD-12345).")
+                out["order_id"] = None
+                out["lookup_email"] = None
+                return out
+
+        text = value.strip().lower()
+
+        # Valid ID format
+        if re.match(r"^ord-\d{5}$", text, re.IGNORECASE):
+            order_id = text.upper()
+            out["order_id"] = order_id
             return out
 
-        v = normalize_order_id(value)
-        if v and ORDER_RE.fullmatch(v):
-            out["order_id"] = v
-            return out
-
-        dispatcher.utter_message(response="utter_order_id_invalid")
+        # Invalid format fallback
+        dispatcher.utter_message(text="That doesn’t look like a valid order ID (e.g., ORD-12345). Could you recheck it?")
         out["order_id"] = None
         return out
 
@@ -700,13 +722,22 @@ class ActionStartReturn(Action):
         return "action_start_return"
 
     def run(self, dispatcher, tracker, domain) -> List[EventType]:
+        events: List[EventType] = []
+
+        # 0) Infer emotion + criticality + conv-risk for this turn
+        # (same helper you use in ValidateReturnForm)
+        emotion_slots = _infer_emotion_slots(tracker)
+        for slot_name, slot_value in emotion_slots.items():
+            events.append(SlotSet(slot_name, slot_value))
+
         oid = tracker.get_slot("order_id")
         reason = tracker.get_slot("return_reason")
 
         # 1) Missing details → fallback + export
         if not oid or not reason:
             dispatcher.utter_message(text="I’m missing details for the return.")
-            events: List[EventType] = [SlotSet("resolution_status", "fallback")]
+            events.append(SlotSet("resolution_status", "fallback"))
+
             export_events = ActionExportConversationSummary().run(
                 dispatcher, tracker, domain
             )
@@ -716,8 +747,9 @@ class ActionStartReturn(Action):
         # 2) Order not found → fallback + export
         if oid not in ORDER_DB:
             dispatcher.utter_message(text=f"Order {oid} not found.")
-            events = clear_context_slots()
-            events.append(SlotSet("resolution_status", "fallback"))  # was "not_found"
+            events.extend(clear_context_slots())
+            events.append(SlotSet("resolution_status", "fallback"))
+
             export_events = ActionExportConversationSummary().run(
                 dispatcher, tracker, domain
             )
@@ -726,10 +758,13 @@ class ActionStartReturn(Action):
 
         # 3) Successful return → resolved + export
         dispatcher.utter_message(
-            text=f"Return initiated for {oid} (reason: {reason}). You’ll receive a label by email shortly."
+            text=(
+                f"Return initiated for {oid} "
+                f"(reason: {reason}). You’ll receive a label by email shortly."
+            )
         )
-        events = clear_context_slots()
-        events.append(SlotSet("resolution_status", "resolved"))  # was "return_started"
+        events.extend(clear_context_slots())
+        events.append(SlotSet("resolution_status", "resolved"))
 
         export_events = ActionExportConversationSummary().run(
             dispatcher, tracker, domain
@@ -884,23 +919,46 @@ class ValidateOrderStatusForm(FormValidationAction):
     def name(self) -> Text:
         return "validate_order_status_form"
 
-    def validate_order_id(self, value, dispatcher, tracker, domain) -> Dict[Text, Any]:
-        out = _infer_emotion_slots(tracker)  # ← add emotion every turn
-        # Don't validate if not currently requesting this slot
+    def validate_order_id(
+        self,
+        value: Text,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        """
+        Validates the order ID during the return form.
+        Handles: valid IDs, reuse of previous ID, and "I don't have it".
+        Also updates emotion + conv-risk for this turn.
+        """
+        out = _infer_emotion_slots(tracker)  # ← emotion + criticality + conv-risk
+
+        # If this slot is not actively requested, just keep the current value
         if tracker.get_slot("requested_slot") != "order_id":
             out["order_id"] = tracker.get_slot("order_id")
             return out
 
         if not value:
-            out["order_id"] = None
+            previous_id = tracker.get_slot("order_id")
+            if previous_id:
+                dispatcher.utter_message(text=f"Got it — we’ll use your previous order ID ({previous_id}).")
+                out["order_id"] = previous_id
+                return out
+            else:
+                dispatcher.utter_message(text="No worries, kindly provide your order ID (e.g., ORD-12345).")
+                out["order_id"] = None
+                out["lookup_email"] = None
+                return out
+
+        text = value.strip().lower()
+        # Valid ID format
+        if re.match(r"^ord-\d{5}$", text, re.IGNORECASE):
+            order_id = text.upper()
+            out["order_id"] = order_id
             return out
 
-        v = (value or "").strip().upper().replace(" ", "")
-        if re.fullmatch(r"ORD-\d{5}", v):
-            out["order_id"] = v
-            return out
-
-        dispatcher.utter_message(response="utter_order_id_invalid")
+        # Invalid format fallback
+        dispatcher.utter_message(text="That doesn’t look like a valid order ID (e.g., ORD-12345). Could you recheck it?")
         out["order_id"] = None
         return out
 
@@ -1082,22 +1140,46 @@ class ValidateCancelOrderForm(FormValidationAction):
     def name(self) -> Text:
         return "validate_cancel_order_form"
 
-    def validate_order_id(self, value, dispatcher, tracker, domain) -> Dict[Text, Any]:
-        out = _infer_emotion_slots(tracker)  # ← add emotion
+    def validate_order_id(
+        self,
+        value: Text,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        """
+        Validates the order ID during the return form.
+        Handles: valid IDs, reuse of previous ID, and "I don't have it".
+        Also updates emotion + conv-risk for this turn.
+        """
+        out = _infer_emotion_slots(tracker)  # ← emotion + criticality + conv-risk
+
+        # If this slot is not actively requested, just keep the current value
         if tracker.get_slot("requested_slot") != "order_id":
             out["order_id"] = tracker.get_slot("order_id")
             return out
 
         if not value:
-            out["order_id"] = None
+            previous_id = tracker.get_slot("order_id")
+            if previous_id:
+                dispatcher.utter_message(text=f"Got it — we’ll use your previous order ID ({previous_id}).")
+                out["order_id"] = previous_id
+                return out
+            else:
+                dispatcher.utter_message(text="No worries, kindly provide your order ID (e.g., ORD-12345).")
+                out["order_id"] = None
+                out["lookup_email"] = None
+                return out
+
+        text = value.strip().lower()
+        # Valid ID format
+        if re.match(r"^ord-\d{5}$", text, re.IGNORECASE):
+            order_id = text.upper()
+            out["order_id"] = order_id
             return out
 
-        v = (value or "").strip().upper().replace(" ", "")
-        if re.fullmatch(r"ORD-\d{5}", v):
-            out["order_id"] = v
-            return out
-
-        dispatcher.utter_message(response="utter_order_id_invalid")
+        # Invalid format fallback
+        dispatcher.utter_message(text="That doesn’t look like a valid order ID (e.g., ORD-12345). Could you recheck it?")
         out["order_id"] = None
         return out
 
@@ -1253,24 +1335,39 @@ class ValidateAddressUpdateForm(FormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        out = _infer_emotion_slots(tracker)  # ← add emotion
-        requested = tracker.get_slot("requested_slot")
-        current = tracker.get_slot("order_id")
+        """
+        Validates the order ID during the return form.
+        Handles: valid IDs, reuse of previous ID, and "I don't have it".
+        Also updates emotion + conv-risk for this turn.
+        """
+        out = _infer_emotion_slots(tracker)  # ← emotion + criticality + conv-risk
 
-        if requested != "order_id":
-            out["order_id"] = current
+        # If this slot is not actively requested, just keep the current value
+        if tracker.get_slot("requested_slot") != "order_id":
+            out["order_id"] = tracker.get_slot("order_id")
             return out
 
         if not value:
-            out["order_id"] = None
+            previous_id = tracker.get_slot("order_id")
+            if previous_id:
+                dispatcher.utter_message(text=f"Got it — we’ll use your previous order ID ({previous_id}).")
+                out["order_id"] = previous_id
+                return out
+            else:
+                dispatcher.utter_message(text="No worries, kindly provide your order ID (e.g., ORD-12345).")
+                out["order_id"] = None
+                out["lookup_email"] = None
+                return out
+
+        text = value.strip().lower()
+        # Valid ID format
+        if re.match(r"^ord-\d{5}$", text, re.IGNORECASE):
+            order_id = text.upper()
+            out["order_id"] = order_id
             return out
 
-        v = normalize_order_id(value)
-        if v and ORDER_RE.fullmatch(v):
-            out["order_id"] = v
-            return out
-
-        dispatcher.utter_message(response="utter_order_id_invalid")
+        # Invalid format fallback
+        dispatcher.utter_message(text="That doesn’t look like a valid order ID (e.g., ORD-12345). Could you recheck it?")
         out["order_id"] = None
         return out
 
