@@ -125,6 +125,156 @@ def _apply_keyword_overrides_text(text: str) -> Optional[Dict[str, Any]]:
                 }
 
     return None
+# ---------------------------------------------------------------------------
+# Extra heuristic rules for tricky messages (safety, finance, contrast, etc.)
+# ---------------------------------------------------------------------------
+
+CONTRAST_MARKERS = [
+    " but ",
+    " even though ",
+    " although ",
+    " though ",
+    " however ",
+]
+
+SAFETY_PATTERNS = [
+    r"caught fire",
+    r"on fire",
+    r"burn(ing)? smell",
+    r"smok(e|ing)",
+    r"explod(ed|e|ing)",
+    r"electric shock",
+    r"shocked me",
+    r"short circuit",
+    r"sparking",
+]
+
+MEDICAL_PATTERNS = [
+    r"wrong label",
+    r"wrong medicine",
+    r"wrong (dose|dosage)",
+    r"expired (medicine|pill|drug)?",
+    r"allergic reaction",
+    r"severe side effects?",
+]
+
+FINANCE_PATTERNS = [
+    r"transactions?\s+i didn[’']t make",
+    r"charges?\s+i don[’']t recognize",
+    r"unauthorized (charge|payment|transaction)",
+    r"account (was )?hacked",
+    r"identity theft",
+    r"fraud(ulent)? charge",
+    r"scam",
+]
+
+CORE_FUNCTION_PATTERNS = [
+    r"keeps? freezing",
+    r"keeps? crashing",
+    r"crash(es|ed)? often",
+    r"screen (keeps )?freez(ing|es)",
+    r"won.?t start",
+    r"won.?t turn on",
+    r"not working",
+    r"stopped working",
+    r"doesn.?t work properly",
+    r"battery dies? after",  # more general
+]
+
+FRUSTRATION_PATTERNS = [
+    r"reported this (three|3|four|4|several|many) times",
+    r"no one is helping me",
+    r"no one helps me",
+    r"no one is responding",
+    r"no one ever replies",
+    r"i feel ignored",
+]
+
+ALL_RULE_PATTERNS = (
+    SAFETY_PATTERNS
+    + MEDICAL_PATTERNS
+    + FINANCE_PATTERNS
+    + CORE_FUNCTION_PATTERNS
+    + FRUSTRATION_PATTERNS
+)
+
+def _matches_any(text: str, patterns: List[str]) -> Optional[str]:
+    """Return the first regex pattern that matches, or None."""
+    for p in patterns:
+        if re.search(p, text):
+            return p
+    return None
+
+
+def _boost_level_prob(
+    dist: Dict[str, float], level: str, target_prob: float
+) -> Dict[str, float]:
+    """Increase probability of `level` to at least `target_prob`, renormalizing others."""
+    current = dist.get(level, 0.0)
+    if current >= target_prob:
+        return dist
+
+    new_dist = dict(dist)
+    new_dist[level] = target_prob
+
+    # redistribute remaining mass across other levels proportionally
+    other_keys = [k for k in dist.keys() if k != level]
+    remaining_mass = 1.0 - target_prob
+    current_other_sum = sum(dist[k] for k in other_keys) or 1e-9
+
+    for k in other_keys:
+        new_dist[k] = dist[k] * (remaining_mass / current_other_sum)
+
+    return new_dist
+
+
+def _apply_structural_rules(
+    text: str, dist: Dict[str, float]
+) -> Tuple[Dict[str, float], str, Optional[str]]:
+    """Apply structural/contrast rules on top of model distribution.
+
+    Returns: (new_distribution, source_suffix, matched_pattern)
+    """
+    lower = (text or "").lower()
+    source_suffix = ""
+    matched_pattern: Optional[str] = None
+
+    # ---- Layer 0: hard safety / medical / finance overrides (force HIGH) ----
+    for group, label in (
+        (SAFETY_PATTERNS, "safety_rule"),
+        (MEDICAL_PATTERNS, "medical_rule"),
+        (FINANCE_PATTERNS, "finance_rule"),
+    ):
+        pat = _matches_any(lower, group)
+        if pat:
+            new_dist = _boost_level_prob(dist, "high", 0.90)
+            return new_dist, f"+{label}", pat
+
+    # ---- Layer 1: core function broken (bump to high if only medium) ----
+    pat = _matches_any(lower, CORE_FUNCTION_PATTERNS)
+    if pat:
+        dist = _boost_level_prob(dist, "high", 0.78)
+        source_suffix += "+core_rule"
+        matched_pattern = pat
+
+    # ---- Layer 2: contrast structures ("but", "even though", etc.) ----
+    for marker in CONTRAST_MARKERS:
+        if marker in lower:
+            _, after = lower.split(marker, 1)
+            pat2 = _matches_any(after, ALL_RULE_PATTERNS)
+            if pat2:
+                dist = _boost_level_prob(dist, "high", 0.80)
+                source_suffix += "+contrast_rule"
+                matched_pattern = matched_pattern or pat2
+            break
+    # ---- Layer 3: repeated complaints / feeling ignored (bump up) ----
+    pat_frustration = _matches_any(lower, FRUSTRATION_PATTERNS)
+    if pat_frustration:
+        dist = _boost_level_prob(dist, "high", 0.78)
+        source_suffix += "+frustration_rule"
+        matched_pattern = matched_pattern or pat_frustration
+
+    return dist, source_suffix, matched_pattern
 
 # ---------------------------------------------------------------------------
 # Shared model defaults (aligned with your config.yml)
@@ -259,19 +409,28 @@ def infer_criticality_for_text(
         total = sum(probs.values()) or 1.0
         fused = {k: v / total for k, v in probs.items()}
 
-    # 3) Pick argmax
+    rule_suffix = ""
+    rule_match: Optional[str] = None
+
+    # 3) Structural rules on top of model+emotion (if enabled and no keyword override)
+    if heuristics_enabled:
+        fused, rule_suffix, rule_match = _apply_structural_rules(text, fused)
+
+    # 4) Pick argmax
     level = max(fused, key=fused.get)
     score = float(fused[level])
     escalation = ESCALATION_MAP[level]
-    
+
+    source = "model" + rule_suffix
+
     logger.info(
         "[criticality] text=%r -> level=%s score=%.2f esc=%s source=%s kw=%s",
         text,
         level,
         score,
         escalation,
-        "model",
-        None,
+        source,
+        rule_match,
     )
 
     return {
@@ -279,8 +438,8 @@ def infer_criticality_for_text(
         "criticality_score": score,
         "escalation": escalation,
         "distribution": fused,
-        "source": "model",
-        "matched_keyword": None,
+        "source": source,
+        "matched_keyword": rule_match,
     }
 
 # ---------------------------------------------------------------------------

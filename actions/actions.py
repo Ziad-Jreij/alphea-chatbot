@@ -5,8 +5,9 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.types import DomainDict
 import re
 import os
+# import requests
 import csv
-from rasa_sdk.events import SlotSet, EventType
+from rasa_sdk.events import SlotSet, EventType, FollowupAction
 import logging
 from threading import Lock
 from components.emotion import ensure_emotion_pipe, coarse_from_label, top_emotion 
@@ -16,6 +17,7 @@ from pathlib import Path
 from components.absa import extract_aspect_opinions
 NOW = datetime.now()
 _init_lock = Lock()
+# DASHBOARD_BACKEND_URL = "http://localhost:5001"  # adjust if needed
 # Fake database for demo
 ORDER_DB = {
     # Classic shipped order – cannot cancel, can start return later
@@ -462,25 +464,31 @@ class ActionUpdateConversationRisk(Action):
         conv_state = _update_conversation_risk(tracker, level, score)
 
         events: List[EventType] = [
-            # per-turn
             SlotSet("criticality_level", level),
             SlotSet("criticality_score", score),
             SlotSet("escalation", turn_escalation),
         ]
 
-        # conversation-level slots
         for k, v in conv_state.items():
             events.append(SlotSet(k, v))
 
+        # ---- NEW: trigger escalation immediately if needed ----
+        conv_escalation = conv_state.get("conversation_escalation") or "none"
+        already_handed_off = bool(tracker.get_slot("handoff_requested"))
+
+        if conv_escalation == "escalate_now" and not already_handed_off:
+            # Schedule the escalation action, which will utter_handoff_ack
+            events.append(FollowupAction("action_escalate_now"))
+
         return events
+
 class ActionEscalateNow(Action):
     def name(self) -> Text:
         return "action_escalate_now"
 
     def run(self, dispatcher, tracker, domain):
-        dispatcher.utter_message(
-            text="I’m escalating this to a human specialist right now. You’ll be connected shortly."
-        )
+        # Domain template, not hard-coded text
+        dispatcher.utter_message(response="utter_handoff_ack")
 
         events: List[EventType] = [
             SlotSet("resolution_status", "escalated"),
@@ -1586,4 +1594,55 @@ class ActionStoreFeedbackAndExport(Action):
         )
 
         return export_events
+######################DASHBOARD
+# class ActionPushStateToDashboard(Action):
+#     def name(self) -> Text:
+#         return "action_push_state_to_dashboard"
 
+#     def run(
+#         self,
+#         dispatcher: CollectingDispatcher,
+#         tracker: Tracker,
+#         domain: DomainDict,
+#     ) -> List[Dict[Text, Any]]:
+
+#         sender_id = tracker.sender_id    # this is your session/user id
+#         last_user_msg = next(
+#             (e.get("text") for e in reversed(tracker.events) if e.get("event") == "user"),
+#             None,
+#         )
+#         last_bot_msg = next(
+#             (e.get("text") for e in reversed(tracker.events) if e.get("event") == "bot"),
+#             None,
+#         )
+
+#         criticality = tracker.get_slot("criticality")
+#         emotion = tracker.get_slot("emotion")
+#         risk = tracker.get_slot("conversation_risk")
+
+#         # Map criticality to a simple status for color
+#         if criticality == "high":
+#             status = "red"
+#         elif criticality == "low":
+#             status = "green"
+#         else:
+#             status = "black"  # neutral / medium / unknown
+
+#         payload = {
+#             "session_id": sender_id,
+#             "criticality": criticality,
+#             "status": status,
+#             "emotion": emotion,
+#             "risk": risk,
+#             "last_user_message": last_user_msg,
+#             "last_bot_message": last_bot_msg,
+#             "updated_at": datetime.utcnow().isoformat() + "Z",
+#         }
+
+#         try:
+#             requests.post(f"{DASHBOARD_BACKEND_URL}/api/update_session", json=payload, timeout=1)
+#         except Exception as e:
+#             # For thesis: log the error but don't break the bot
+#             print(f"[Dashboard] Failed to update session: {e}")
+
+#         return []

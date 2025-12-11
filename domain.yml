@@ -497,25 +497,9 @@ responses:
 
   utter_oos_personal_condolences:
     - text: >
-        I’m really sorry you’re going through something so difficult. 💛  
+        I’m really sorry you’re going through something so difficult.   
         I’m not able to fully support personal or emotional situations, but if there’s
         anything practical I can do for your order or account, I’m here to help.
-
-  # Distress / Crisis Guidance (non-clinical, supportive)
-  utter_crisis_help:
-    - text: >
-        I’m truly sorry that you’re feeling this way. Your well-being is very important.  
-        If you might be in danger or thinking about harming yourself, please contact local
-        emergency services or a trusted person immediately.  
-        If you have access to a mental health hotline or professional support, reaching out
-        to them could really help.  
-        When you’re ready, I can still assist you with any order or account tasks here.
-
-  utter_acknowledge_critical_issue:
-    - text: >
-        I understand — this sounds serious and important. I’m going to prioritize your
-        case and make sure it’s handled with extra care.
-
   utter_escalation_banner:
     - text: >
         I’m escalating this conversation to a human specialist so you can get dedicated
@@ -550,7 +534,8 @@ actions:
   - action_set_primary_intent
   - action_export_conversation_summary
   - action_mark_fallback
-  - action_store_feedback_and_export
+  - action_store_feedback_and_export  
+  # - action_push_state_to_dashboard
 
 forms:
   confirm_reuse_address_form:

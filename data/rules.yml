@@ -411,8 +411,6 @@ rules:
     - intent: out_of_scope_personal_distress
     - action: action_infer_emotion
     - action: action_update_conversation_risk
-    - action: utter_show_empathy
-    - action: utter_crisis_help
     - action: utter_oos_personal_condolences
     - action: utter_welcome_menu
 - rule: Handle conversation feedback and export
@@ -433,7 +431,6 @@ rules:
         - escalation: "escalate_now"
   steps:
     - action: utter_show_empathy
-    - action: utter_acknowledge_critical_issue
     - action: utter_escalation_banner
     - action: action_escalate_now
 
@@ -445,7 +442,6 @@ rules:
         - conversation_escalation: escalate_now
   steps:
     - action: utter_show_empathy
-    - action: utter_acknowledge_critical_issue
     - action: utter_escalation_banner
     - action: action_escalate_now
 # When conversation-level risk is "potential" → gentle empathy + offer handoff
@@ -599,3 +595,42 @@ rules:
   steps:
     - action: action_escalate_now
     - action: action_export_conversation_summary
+###############################################
+# Example: generic update after risk computation
+# - rule: Update dashboard after risk update
+#   steps:
+#     - action: action_infer_emotion
+#     - action: action_update_conversation_risk
+#     - action: action_push_state_to_dashboard
+# - rule: After explicit escalation, update dashboard
+#   steps:
+#     - action: action_escalate_now
+#     - action: action_push_state_to_dashboard
+
+# - rule: After offer handoff, update dashboard
+#   steps:
+#     - action: action_offer_handoff
+#     - action: action_push_state_to_dashboard
+
+# - rule: After user requests handoff, update dashboard
+#   steps:
+#     - action: action_request_handoff
+#     - action: action_push_state_to_dashboard
+
+# - rule: After clearing context, update dashboard
+#   steps:
+#     - action: action_clear_context
+#     - action: action_push_state_to_dashboard
+
+# - rule: After mark fallback, update dashboard
+#   steps:
+#     - action: action_mark_fallback
+#     - action: action_push_state_to_dashboard
+# - rule: On session start, register conversation on dashboard
+#   steps:
+#     - action: action_session_start
+#     - action: action_push_state_to_dashboard
+# - rule: After storing feedback, final update to dashboard
+#   steps:
+#     - action: action_store_feedback_and_export
+#     - action: action_push_state_to_dashboard

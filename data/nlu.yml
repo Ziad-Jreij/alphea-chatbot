@@ -264,7 +264,7 @@ nlu:
     - when can I reach customer service?
     - what are your customer support opening hours?
 
-- intent: faq/contact_channels
+- intent: faq_contact_channels
   examples: |
     - how can I contact support?
     - do you have live chat?
