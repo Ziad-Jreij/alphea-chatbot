@@ -319,7 +319,7 @@ nlu:
     - I don't know my order id
 - intent: product_feedback_positive
   examples: |
-    - I'm happy with my product
+    - I'm happy with the product
     - I love my purchase
     - everything works great
     - very satisfied with the product
@@ -330,10 +330,20 @@ nlu:
     - five stars, great product!
     - couldn't be happier with it
     - highly recommend this item
-    - this product is amazing
-    - I’m really satisfied with what I got
+    - the battery life is amazing
+    - the camera is really good
+    - it feels premium and well built
+    - super fast and smooth
+    - works exactly as described
+    - I’m impressed with the quality
     - great value for money
-    - I’m very happy with this purchase
+    - worth every euro
+    - honestly this is great
+    - no complaints, it’s perfect
+    - love the design
+    - the app is easy to use
+    - everything is fine with my product
+    - I’m satisfied overall
 - intent: product_feedback_negative
   examples: |
     - I'm unhappy with my product
@@ -341,17 +351,33 @@ nlu:
     - the product is bad
     - it doesn't work as expected
     - I'm not satisfied
-    - this is terrible quality
+    - terrible quality
     - total waste of money
-    - I demand a refund for this junk
     - worst purchase ever
-    - I have a major complaint about the product
-    - this product is not worth the price
     - I regret buying this
-    - this product is not good at all
-    - I regret buying this item
     - the quality doesn’t match the price
-    - I’m really disappointed in this product
+    - it arrived broken
+    - it stopped working after a day
+    - the battery drains too fast
+    - it overheats when I use it
+    - it’s slow and laggy
+    - the app keeps crashing
+    - the camera is blurry
+    - the screen has a defect
+    - the material feels cheap
+    - missing parts in the box
+    - I want to return this product
+    - I want a refund
+    - this is unacceptable
+    - I’m really frustrated with this product
+- intent: product_feedback_mixed
+  examples: |
+    - I love the design but the battery is awful
+    - the camera is great but it overheats
+    - nice product overall, however it's too expensive
+    - I’m happy with it, but it keeps crashing
+    - it works fine, except the performance is slow
+    - great quality, but delivery was late
 - intent: out_of_scope_general
   examples: |
      - tell me about quantum physics

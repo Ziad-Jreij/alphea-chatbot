@@ -8,8 +8,51 @@ from components.emotion import coarse_from_label  # reuse if we need global sent
 # name: what you store in "Aspect"
 # terms: how it might appear in text
 # category: high-level category for thesis (Performance, Features, Cost, Aesthetics, etc.)
-
 ASPECT_SPECS = [
+    {
+    "name": "account security",
+    "terms": [
+        "account security",
+        "suspicious transactions",
+        "transactions i didn't make",
+        "transactions I didn't make",
+        "transactions i did not make",
+        "charges i don't recognize",
+        "charges i do not recognize",
+        "unauthorized transactions",
+        "unauthorized charges",
+        "fraudulent transaction",
+        "fraudulent charge",
+        "card was used without my permission",
+    ],
+    "category": "Security",
+    },
+    {
+    "name": "safety & defects",
+    "terms": [
+        "safety",
+        "safe to use",
+        "unsafe",
+        "dangerous",
+        "fire hazard",
+        "caught fire",
+        "on fire",
+        "burned",
+        "smelled like smoke",
+        "smell of smoke",
+        "leaking water",
+        "leaking everywhere",
+        "leaks everywhere",
+        "water everywhere",
+        "leaking",
+        "leak",
+        "electric shock",
+        "gave me a shock",
+        "short circuit",
+    ],
+    "category": "Reliability",
+    },
+
     # --- Product performance & features ---
     {
         "name": "battery life",
@@ -97,21 +140,24 @@ ASPECT_SPECS = [
             "reliability",
             "reliable",
             "unreliable",
-            "crashes",
-            "crashing",
-            "keeps crashing",
-            "crashed",
-            "bugs",
-            "buggy",
-            "glitches",
-            "glitchy",
-            "frozen",
-            "keeps restarting",
-            "hangs",
-            "unstable",
             "stability",
+            "stable",
+            "unstable",
+            "uptime",
         ],
         "category": "Reliability",
+    },
+    {
+        "name": "delivery tracking",
+        "terms": [
+            "delivery tracker",
+            "delivery tracking",
+            "tracking",
+            "track my delivery",
+            "tracking page",
+            "tracking link",
+        ],
+        "category": "Digital_Experience",
     },
     {
         "name": "internet speed",
@@ -175,6 +221,10 @@ ASPECT_SPECS = [
             "easy to navigate",
             "interface is confusing",
             "UI is confusing",
+            "user interface",
+            "interface",
+            "ui",
+            "ui design",
         ],
         "category": "Usability",
     },
@@ -277,6 +327,9 @@ ASPECT_SPECS = [
             "service fee",
             "maintenance fee",
             "late fee",
+            "return shipping fee",
+            "shipping fee",
+            "return fee",
         ],
         "category": "Cost",
     },
@@ -348,6 +401,9 @@ ASPECT_SPECS = [
     {
         "name": "app experience",
         "terms": [
+            "app",
+            "the app",
+            "application",
             "mobile app",
             "phone app",
             "the app experience",
@@ -355,6 +411,7 @@ ASPECT_SPECS = [
             "app interface",
             "app design",
             "app layout",
+            "in the app",
         ],
         "category": "Digital_Experience",
     },
@@ -521,6 +578,18 @@ ASPECT_SPECS = [
         ],
         "category": "Support_Content",
     },
+    {
+        "name": "refund speed",
+        "terms": [
+            "refund speed",
+            "speed of the refund",
+            "refund was fast",
+            "refund was quick",
+            "fast refund",
+            "quick refund",
+        ],
+        "category": "Policy",
+    },
 
     # --- Policies / returns ---
     {
@@ -597,6 +666,10 @@ POS_OPINIONS = [
     "kind", "professional",
     "appreciate",
     "fixed it right away", "replaced quickly",
+    "so happy",
+    "really happy",
+    "i'm very happy", "still great", "surprisingly fast", "very fast", 
+    "looks polished", "clean", "clean and intuitive"
 ]
 
 
@@ -605,9 +678,9 @@ NEG_OPINIONS = [
     "bad", "very bad", "terrible", "awful", "horrible", "poor",
     "horrendous", "unacceptable", "feels cheap",
     "poor value",
-    "not worth it",
+    "not worth it", "outrageous",
     "return was difficult",
-    "overall i'm unhappy",
+    "overall i'm unhappy", "unjustifiable", "not justifiable",
 
     # Dissatisfaction / dislike
     "disappointing", "very disappointing",
@@ -635,7 +708,67 @@ NEG_OPINIONS = [
     "too high", "getting ridiculous", "ridiculous",
     "hate", "really hate",
     "incorrect", "still see an old, incorrect charge",
-    
+    "battery dies fast",
+    "battery dies after",
+    "dies after two hours",
+    "dies after a few hours",
+    "keeps freezing",
+    "keeps crashing",
+    "crashes often",
+    "freezes randomly",
+    "leaking water everywhere",
+    "leaking water",
+    "leaks everywhere",
+
+    # Safety / medical
+    "caught fire",
+    "caught on fire",
+    "wrong label",
+    "wrong medicine",
+    "wrong dosage",
+    "dangerous",
+    "not safe",
+    "unsafe",
+    "buggy",
+    "crashes",
+    "crashing",
+    "crashes often",
+    "keeps crashing",
+    "freezes",
+    "keeps freezing",
+
+    # Security / fraud
+    "transactions i didn't make",
+    "transactions I didn't make",
+    "unauthorized transactions",
+    "unauthorized charges",
+    "fraudulent charge",
+    "fraudulent transaction", 
+    # Mixed-clause negatives
+    "crashes often",
+    "keeps crashing",
+    "keeps freezing",
+    "freezes often",
+    "freezes randomly",
+
+    # Price
+    "a little too high",
+    "too high",
+    "way too high",
+
+    # Billing / correctness
+    "incorrect for three months",
+    "incorrect for months",
+    "incorrect for three months now",
+    "has been incorrect",
+    "billing has been incorrect",
+
+    # Performance / speed
+    "loads incredibly slow",
+    "loads really slow",
+    "loads very slow",
+    "incredibly slow",
+    "really slow", "rude"
 ]
 
 
@@ -660,7 +793,7 @@ def _find_all_opinion_mentions(
 
     def add_mentions(phrases: List[str], sentiment: str):
         nonlocal mentions, used_spans
-        for phrase in phrases:
+        for phrase in sorted(phrases, key=len, reverse=True):
             phr = phrase.lower()
             start = 0
             while True:
@@ -710,7 +843,7 @@ def _find_all_aspect_mentions(
         aspect_name = spec["name"]
         category = spec["category"]
 
-        for term in spec["terms"]:
+        for term in sorted(spec["terms"], key=len, reverse=True):
             term_lc = term.lower()
             start = 0
             while True:
@@ -772,7 +905,9 @@ def extract_aspect_opinions(
     original_text = (text or "").strip()
     if not original_text:
         return []
-
+    # Skip Rasa payload commands like "/cancel_order" or "/report_damaged_product"
+    if original_text.startswith("/"):
+        return []
     # Global fallback sentiment (from emotion pipeline)
     global_sentiment = None
     if sentiment_label in {"positive", "negative", "neutral"}:
@@ -784,17 +919,61 @@ def extract_aspect_opinions(
 
     aspect_mentions = _find_all_aspect_mentions(original_text, original_text)
     opinion_mentions = _find_all_opinion_mentions(original_text, original_text)
+    # --- Contrast / second-clause detection (for mixed messages) ---
+    CONTRAST_MARKERS = [" but ", " even though ", " although ", " though ", " however "]
+    NEG_CONTEXT_HINTS = [
+        "too high", "unjustifiable", "outrageous", "ridiculous",
+        "incorrect", "wrong", "broken", "not working", "doesn't work", "doesnt work",
+        "slow", "lags", "laggy", "freezes", "crashes", "buggy",
+        "unhelpful", "rude", "late", "delayed",
+    ]
 
+    text_lc = original_text.lower()
+    second_clause_negative = False
+    second_clause_start = None
+
+    for marker in CONTRAST_MARKERS:
+        idx = text_lc.find(marker)
+        if idx != -1:
+            second_clause_start = idx + len(marker)
+            after = text_lc[second_clause_start:]
+            if any(h in after for h in NEG_CONTEXT_HINTS):
+                second_clause_negative = True
+            break
     if not aspect_mentions:
+        # If there is global sentiment, create a synthetic "overall experience" aspect
+        if global_sentiment is not None:
+            return [
+                {
+                    "aspect": "overall experience",
+                    "aspect_term": None,
+                    "aspect_category": "Overall_Experience",
+                    "opinion_term": opinion_mentions[0]["opinion_term"]
+                    if opinion_mentions
+                    else None,
+                    "aspect_sentiment": global_sentiment,
+                    "aspect_sentiment_confidence": 0.7,
+                }
+            ]
+        # No aspect and no sentiment -> nothing to log
         return []
-
     results: List[Dict] = []
 
     if opinion_mentions:
         pairs = []
         for ai, a in enumerate(aspect_mentions):
             for oi, o in enumerate(opinion_mentions):
-                dist = abs(a["pos"] - o["pos"])
+                # penalize pairing across sentence boundaries
+                same_sentence_bonus = 0
+                a_before = original_text.rfind(".", 0, a["pos"])
+                a_after  = original_text.find(".", a["pos"])
+                o_before = original_text.rfind(".", 0, o["pos"])
+                o_after  = original_text.find(".", o["pos"])
+
+                if a_before == o_before and a_after == o_after:
+                    same_sentence_bonus = -30  # pull same-sentence pairs closer
+
+                dist = abs(a["pos"] - o["pos"]) + same_sentence_bonus
                 pairs.append((dist, ai, oi))
 
         pairs.sort(key=lambda x: x[0])
@@ -826,8 +1005,17 @@ def extract_aspect_opinions(
         for idx, a in enumerate(aspect_mentions):
             if idx in assigned_aspects:
                 continue
+
             sent = global_sentiment or "neutral"
             conf = 0.7 if global_sentiment else 0.5
+
+            # If this aspect is in the second clause and the second clause is negative,
+            # override the fallback sentiment to negative.
+            if second_clause_negative and second_clause_start is not None:
+                if a["pos"] >= second_clause_start:
+                    sent = "negative"
+                    conf = 0.85
+
             results.append(
                 {
                     "aspect": a["aspect"],

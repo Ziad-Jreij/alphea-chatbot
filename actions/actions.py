@@ -438,8 +438,6 @@ def _infer_absa_for_latest_user_turn(
         emotion_label=emotion_label,
     )
     _export_absa_rows(rows)
-
-
 ############################################
 class ActionUpdateConversationRisk(Action):
     def name(self) -> str: 
@@ -786,34 +784,67 @@ class ActionLookupOrderStatusByEmail(Action):
         return "action_lookup_order_status_by_email"
 
     def run(self, dispatcher, tracker, domain):
-        email = tracker.get_slot("lookup_email")
+        email = (tracker.get_slot("lookup_email") or "").strip().lower()
 
-        # Found order → resolved + export
+        # Helper: find latest order for this email from ORDER_DB
+        def _find_order_by_email(target_email: str):
+            matches = []
+            for oid, data in ORDER_DB.items():
+                db_email = (data.get("email") or "").strip().lower()
+                if db_email == target_email:
+                    matches.append((oid, data))
+
+            # If multiple matches exist, pick the newest by created_at (ISO string)
+            if not matches:
+                return None, None
+
+            matches.sort(key=lambda x: x[1].get("created_at", ""), reverse=True)
+            return matches[0]  # (order_id, data)
+
+        events: List[EventType] = []
+
         if email:
-            dispatcher.utter_message(
-                text=f"Found your latest order via {email}: ORD-12345 — Shipped, ETA 2 days."
-            )
-            events: List[EventType] = [
-                SlotSet("lookup_email", None),
-                SlotSet("resolution_status", "resolved"),
-            ]
-            export_events = ActionExportConversationSummary().run(
-                dispatcher, tracker, domain
-            )
+            order_id, order = _find_order_by_email(email)
+
+            if order_id and order:
+                status = order.get("status", "Unknown")
+                eta = order.get("eta", "TBD")
+
+                dispatcher.utter_message(
+                    text=f"Found your latest order via {email}: {order_id} — {status}, ETA {eta}."
+                )
+                events += [
+                    SlotSet("lookup_email", None),
+                    SlotSet("order_id", order_id),  # optional but useful for continuity
+                    SlotSet("resolution_status", "resolved"),
+                ]
+            else:
+                dispatcher.utter_message(text=f"I couldn’t find any orders for {email}.")
+                events += [
+                    SlotSet("lookup_email", None),
+                    SlotSet("resolution_status", "fallback"),
+                ]
+
+            # ✅ Always ask for conversation feedback at the end of the email flow
+            dispatcher.utter_message(response="utter_ask_conversation_feedback")
+
+            # Export after the final bot message (so the log reflects the full outcome)
+            export_events = ActionExportConversationSummary().run(dispatcher, tracker, domain)
             events.extend(export_events)
             return events
 
-        # Not found → fallback + export
-        dispatcher.utter_message(text="I couldn’t find any orders for that email.")
-        events = [
+        # If somehow email is empty, keep previous behavior but also request feedback
+        dispatcher.utter_message(text="Please share the email you used for your order.")
+        dispatcher.utter_message(response="utter_ask_conversation_feedback")
+
+        events += [
             SlotSet("lookup_email", None),
             SlotSet("resolution_status", "fallback"),
         ]
-        export_events = ActionExportConversationSummary().run(
-            dispatcher, tracker, domain
-        )
+        export_events = ActionExportConversationSummary().run(dispatcher, tracker, domain)
         events.extend(export_events)
         return events
+
 class ActionPasswordReset(Action):
     def name(self) -> Text:
         return "action_password_reset"
@@ -1075,19 +1106,25 @@ class ActionSetPrimaryIntent(Action):
         tracker: Tracker,
         domain: DomainDict,
     ) -> List[EventType]:
-        current = tracker.get_slot("primary_intent")
-        latest_intent = tracker.latest_message.get("intent", {}).get("name")
+        intent_name = tracker.latest_message.get("intent", {}).get("name")
+        events: List[EventType] = [
+            SlotSet("primary_intent", intent_name),
+        ]
 
-        if current is None and latest_intent:
-            logger.info(
-                "[session] setting primary_intent=%s for session_id=%s",
-                latest_intent,
-                tracker.sender_id,
+        # --- NEW: ABSA hook for all feedback intents ---
+        if intent_name in ABSA_ENABLED_INTENTS:
+            text = (tracker.latest_message.get("text") or "").strip()
+            emo = tracker.get_slot("top_emotion")
+            sentiment = tracker.get_slot("sentiment")  # your coarse sentiment slot
+
+            _infer_absa_for_latest_user_turn(
+                tracker=tracker,
+                text=text,
+                emotion_label=emo,
+                sentiment_label=sentiment,
             )
-            return [SlotSet("primary_intent", latest_intent)]
 
-        return []
-
+        return events
 class ValidateReturnForm(FormValidationAction):
     def name(self) -> Text:
         return "validate_return_form"

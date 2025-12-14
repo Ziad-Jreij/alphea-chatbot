@@ -26,6 +26,7 @@ intents:
   - out_of_scope_personal_distress
   - faq_contact_channels
   - give_conversation_feedback
+  - product_feedback_mixed
 entities:
   - order_id
   - email
@@ -175,12 +176,10 @@ slots:
             requested_slot: order_id
           - active_loop: damage_report_form
             requested_slot: order_id
-      - type: from_intent
-        value: "NO_ORDER_ID"
-        intent: no_order_id
-        conditions:
-          - active_loop: order_status_form
-            requested_slot: order_id
+        not_intent:
+          - no_order_id
+          - nlu_fallback
+          - out_of_scope
   reuse_ok:
     type: categorical
     values: ["yes", "no"]
@@ -458,7 +457,7 @@ responses:
         "You can reach our support team in several ways:\n
         • Live chat: 09:00–18:00 EET \n 
         • Email: support@company.com  \n 
-        • Phone: +357-XXXXXXX  \n
+        • Phone: +357-96673242  \n
 
         If you tell me what you need, I can also try to handle it directly here in the chat."
 
