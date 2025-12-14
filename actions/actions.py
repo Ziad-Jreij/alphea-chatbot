@@ -5,7 +5,7 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.types import DomainDict
 import re
 import os
-# import requests
+import requests
 import csv
 from rasa_sdk.events import SlotSet, EventType, FollowupAction
 import logging
@@ -17,7 +17,7 @@ from pathlib import Path
 from components.absa import extract_aspect_opinions
 NOW = datetime.now()
 _init_lock = Lock()
-# DASHBOARD_BACKEND_URL = "http://localhost:5001"  # adjust if needed
+DASHBOARD_BACKEND_URL = "http://localhost:5001"  # adjust if needed
 # Fake database for demo
 ORDER_DB = {
     # Classic shipped order – cannot cancel, can start return later
@@ -485,17 +485,15 @@ class ActionEscalateNow(Action):
         return "action_escalate_now"
 
     def run(self, dispatcher, tracker, domain):
-        # Domain template, not hard-coded text
         dispatcher.utter_message(response="utter_handoff_ack")
 
         events: List[EventType] = [
             SlotSet("resolution_status", "escalated"),
             SlotSet("handoff_requested", True),
+            FollowupAction("action_push_state_to_dashboard"),  # <-- add this
         ]
 
-        export_events = ActionExportConversationSummary().run(
-            dispatcher, tracker, domain
-        )
+        export_events = ActionExportConversationSummary().run(dispatcher, tracker, domain)
         events.extend(export_events)
 
         return events
@@ -1632,54 +1630,81 @@ class ActionStoreFeedbackAndExport(Action):
 
         return export_events
 ######################DASHBOARD
-# class ActionPushStateToDashboard(Action):
-#     def name(self) -> Text:
-#         return "action_push_state_to_dashboard"
+class ActionPushStateToDashboard(Action):
+    def name(self) -> Text:
+        return "action_push_state_to_dashboard"
 
-#     def run(
-#         self,
-#         dispatcher: CollectingDispatcher,
-#         tracker: Tracker,
-#         domain: DomainDict,
-#     ) -> List[Dict[Text, Any]]:
+    def run(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> List[Dict[Text, Any]]:
 
-#         sender_id = tracker.sender_id    # this is your session/user id
-#         last_user_msg = next(
-#             (e.get("text") for e in reversed(tracker.events) if e.get("event") == "user"),
-#             None,
-#         )
-#         last_bot_msg = next(
-#             (e.get("text") for e in reversed(tracker.events) if e.get("event") == "bot"),
-#             None,
-#         )
+        sender_id = tracker.sender_id
 
-#         criticality = tracker.get_slot("criticality")
-#         emotion = tracker.get_slot("emotion")
-#         risk = tracker.get_slot("conversation_risk")
+        last_user_msg = next(
+            (e.get("text") for e in reversed(tracker.events) if e.get("event") == "user"),
+            None,
+        )
+        last_bot_msg = next(
+            (e.get("text") for e in reversed(tracker.events) if e.get("event") == "bot"),
+            None,
+        )
 
-#         # Map criticality to a simple status for color
-#         if criticality == "high":
-#             status = "red"
-#         elif criticality == "low":
-#             status = "green"
-#         else:
-#             status = "black"  # neutral / medium / unknown
+        # ---- Slots (exactly as in your domain.yml) ----
+        criticality_level = (tracker.get_slot("criticality_level") or "unknown").lower()
+        criticality_score = tracker.get_slot("criticality_score")
 
-#         payload = {
-#             "session_id": sender_id,
-#             "criticality": criticality,
-#             "status": status,
-#             "emotion": emotion,
-#             "risk": risk,
-#             "last_user_message": last_user_msg,
-#             "last_bot_message": last_bot_msg,
-#             "updated_at": datetime.utcnow().isoformat() + "Z",
-#         }
+        escalation = tracker.get_slot("escalation") or "none"
+        conversation_escalation = tracker.get_slot("conversation_escalation") or "none"
+        handoff_requested = bool(tracker.get_slot("handoff_requested"))
 
-#         try:
-#             requests.post(f"{DASHBOARD_BACKEND_URL}/api/update_session", json=payload, timeout=1)
-#         except Exception as e:
-#             # For thesis: log the error but don't break the bot
-#             print(f"[Dashboard] Failed to update session: {e}")
+        # Conversation-level risk
+        conversation_criticality = tracker.get_slot("conversation_criticality") or "unknown"
+        conversation_criticality_score = tracker.get_slot("conversation_criticality_score")
 
-#         return []
+        # Emotion/sentiment
+        top_emotion = tracker.get_slot("top_emotion") or tracker.get_slot("overall_emotion") or "n/a"
+        sentiment = tracker.get_slot("sentiment") or "n/a"
+
+        # ---- Decide dashboard status color (green / black / red) ----
+        if handoff_requested or escalation == "escalate_now" or conversation_escalation == "escalate_now":
+            status = "red"
+        elif criticality_level == "low":
+            status = "green"
+        else:
+            status = "black"
+
+        payload = {
+            "session_id": sender_id,
+
+            # For your list view (simple)
+            "status": status,
+            "criticality": criticality_level,
+            "emotion": top_emotion,
+
+            # Extra metadata (useful when agent clicks a session)
+            "sentiment": sentiment,
+            "criticality_score": criticality_score,
+            "escalation": escalation,
+            "conversation_criticality": conversation_criticality,
+            "conversation_criticality_score": conversation_criticality_score,
+            "conversation_escalation": conversation_escalation,
+            "handoff_requested": handoff_requested,
+
+            "last_user_message": last_user_msg,
+            "last_bot_message": last_bot_msg,
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        }
+
+        try:
+            requests.post(
+                f"{DASHBOARD_BACKEND_URL}/api/update_session",
+                json=payload,
+                timeout=1,
+            )
+        except Exception as e:
+            print(f"[Dashboard] Failed to update session: {e}")
+
+        return []

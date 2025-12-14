@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Agent Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --sidebar-width: 350px;
+      --bg-color: #f3f4f6;
+      --sidebar-bg: #ffffff;
+      --primary-color: #4f46e5;
+      --text-main: #111827;
+      --text-muted: #6b7280;
+      --border-color: #e5e7eb;
+
+      /* Status Colors */
+      --status-green-bg: #d1fae5;
+      --status-green-text: #065f46;
+      --status-red-bg: #fee2e2;
+      --status-red-text: #991b1b;
+      --status-black-bg: #f3f4f6;
+      --status-black-text: #1f2937;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      display: flex;
+      height: 100vh;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+    }
+
+    /* --- IMPORTANT: prevent shrink-to-content issues in flex layouts --- */
+    #main { min-width: 0; }
+    #dashboard-view { width: 100%; min-width: 0; }
+    .top-bar { width: 100%; }
+    .metrics-grid { width: 100%; }
+    .chat-area { width: 100%; min-width: 0; }
+
+    /* --- SIDEBAR --- */
+    #sidebar {
+      width: var(--sidebar-width);
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 4px 0 24px rgba(0,0,0,0.02);
+      z-index: 10;
+    }
+
+    .sidebar-header {
+      padding: 20px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .sidebar-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .live-indicator {
+      width: 8px;
+      height: 8px;
+      background-color: #10b981;
+      border-radius: 50%;
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+    }
+
+    #sessions-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+
+    /* Session Card Styling */
+    .session {
+      display: flex;
+      align-items: flex-start;
+      padding: 12px;
+      margin-bottom: 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+      background: #fff;
+    }
+
+    .session:hover {
+      background: #f9fafb;
+      border-color: var(--border-color);
+    }
+
+    .session.active {
+      background: #eef2ff;
+      border-color: #c7d2fe;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-top: 5px;
+      margin-right: 12px;
+      flex-shrink: 0;
+    }
+
+    /* Status Styles */
+    .status-green { background: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2); }
+    .status-black { background: #6b7280; }
+
+    .status-red {
+      background: #ef4444;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+      animation: pulse-red 2s infinite;
+    }
+
+    @keyframes pulse-red {
+      0% { box-shadow: 0 0 0 0px rgba(239, 68, 68, 0.7); }
+      100% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+    }
+
+    .session-info { flex: 1; min-width: 0; }
+
+    .session-id {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 4px;
+      word-break: break-all;
+    }
+
+    .session-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    /* Badges for sidebar */
+    .mini-badge {
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .badge-crit-high { background: var(--status-red-bg); color: var(--status-red-text); }
+    .badge-crit-low { background: var(--status-black-bg); color: var(--status-black-text); }
+
+    /* Escalation badges */
+    .badge-escalate { background: var(--status-red-bg); color: var(--status-red-text); }
+    .badge-potential { background: #fef3c7; color: #92400e; } /* amber */
+    .badge-none { background: var(--status-black-bg); color: var(--status-black-text); }
+
+    /* --- MAIN CONTENT --- */
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    /* Empty State */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-muted);
+    }
+    .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; }
+
+    /* Main View Container */
+    #dashboard-view {
+      display: none;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    /* Header Bar */
+    .top-bar {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #fff;
+      gap: 16px;
+    }
+
+    .top-bar-title h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .top-bar-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .action-buttons button {
+      background: white;
+      border: 1px solid var(--border-color);
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .action-buttons button.primary {
+      background: var(--primary-color);
+      color: white;
+      border: 1px solid var(--primary-color);
+    }
+    .action-buttons button:hover { opacity: 0.9; }
+
+    /* Metrics Grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      padding: 24px;
+      background: #fafafa;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .metric-card {
+      background: white;
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .metric-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .metric-value { font-size: 18px; font-weight: 600; }
+
+    /* Tabs */
+    .tabs-bar{
+      display:flex;
+      gap:8px;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--border-color);
+      background:#fff;
+    }
+
+    .tab-btn{
+      border:1px solid var(--border-color);
+      background:#fff;
+      padding:8px 12px;
+      border-radius:8px;
+      font-size:13px;
+      font-weight:600;
+      cursor:pointer;
+    }
+
+    .tab-btn.active{
+      background:#eef2ff;
+      border-color:#c7d2fe;
+      color:#3730a3;
+    }
+
+    .tab-panel{ display:none; width:100%; min-width:0; }
+    .tab-panel.active{ display:block; }
+
+    /* Chat Area */
+    .chat-area {
+      height: calc(100vh - 320px);
+      padding: 24px;
+      background: #fff;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .chat-bubble {
+      max-width: 70%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+      position: relative;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    .chat-user {
+      align-self: flex-end;
+      background-color: var(--primary-color);
+      color: white;
+      border-bottom-right-radius: 2px;
+    }
+    .chat-user::before {
+      content: "User";
+      position: absolute;
+      top: -18px;
+      right: 0;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .chat-bot {
+      align-self: flex-start;
+      background-color: #f3f4f6;
+      color: var(--text-main);
+      border-bottom-left-radius: 2px;
+    }
+    .chat-bot::before {
+      content: "AI Bot";
+      position: absolute;
+      top: -18px;
+      left: 0;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .timestamp {
+      text-align: center;
+      font-size: 11px;
+      color: #9ca3af;
+      margin-top: 10px;
+    }
+
+    /* Signals panel */
+    .signals-box{
+      margin: 0;
+      padding: 16px 24px;
+      background:#fafafa;
+      height: calc(100vh - 320px);
+      overflow:auto;
+      font-size:12px;
+      color:#111827;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="sidebar">
+    <div class="sidebar-header">
+      <h2><span class="live-indicator"></span> Live Feed</h2>
+    </div>
+    <div id="sessions-container"></div>
+  </div>
+
+  <div id="main">
+
+    <div id="empty-state" class="empty-state">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z">
+        </path>
+      </svg>
+      <div>Select a conversation to monitor details</div>
+    </div>
+
+    <div id="dashboard-view">
+      <div class="top-bar">
+        <div class="top-bar-title">
+          <h1 id="view-session-id">Session #...</h1>
+          <div id="view-last-updated" class="top-bar-subtitle">Last updated: ...</div>
+        </div>
+        <div class="action-buttons">
+          <button onclick="markResolved()">Mark Resolved</button>
+          <button class="primary">Take Over Chat</button>
+        </div>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">Criticality Score</div>
+          <div class="metric-value" id="view-criticality">-</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Detected Emotion</div>
+          <div class="metric-value" id="view-emotion">-</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Risk Level</div>
+          <div class="metric-value" id="view-risk">-</div>
+        </div>
+      </div>
+
+      <div class="tabs-bar">
+        <button class="tab-btn active" data-tab="transcript">Transcript</button>
+        <button class="tab-btn" data-tab="signals">Signals</button>
+      </div>
+
+      <div id="tab-transcript" class="tab-panel active">
+        <div class="chat-area" id="view-chat-area"></div>
+      </div>
+
+      <div id="tab-signals" class="tab-panel">
+        <pre id="view-signals" class="signals-box">{}</pre>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const API_BASE = "http://localhost:5001";
+
+    // DOM Elements
+    const sessionsDiv = document.getElementById("sessions-container");
+    const emptyState = document.getElementById("empty-state");
+    const dashboardView = document.getElementById("dashboard-view");
+
+    // View Elements
+    const viewSessionId = document.getElementById("view-session-id");
+    const viewLastUpdated = document.getElementById("view-last-updated");
+    const viewCriticality = document.getElementById("view-criticality");
+    const viewEmotion = document.getElementById("view-emotion");
+    const viewRisk = document.getElementById("view-risk");
+    const viewChatArea = document.getElementById("view-chat-area");
+    const viewSignals = document.getElementById("view-signals");
+
+    let currentSessionId = null;
+
+    // Helper: Determine CSS class based on status
+    function statusClass(status) {
+      if (status === "green") return "status-green";
+      if (status === "red") return "status-red";
+      return "status-black";
+    }
+
+    // Helper: Badge HTML
+    function badge(label, cls) {
+      return `<span class="mini-badge ${cls}">${label}</span>`;
+    }
+
+    // Criticality badge
+    function getCriticalityBadge(level) {
+      if (!level) return "";
+      const v = String(level).toLowerCase();
+      if (v === "high") return badge("HIGH", "badge-crit-high");
+      if (v === "low") return badge("LOW", "badge-crit-low");
+      return badge("MED", "badge-none");
+    }
+
+    // Escalation badge
+    function getEscalationBadge(escalation) {
+      if (!escalation) return "";
+      const v = String(escalation).toLowerCase();
+      if (v === "escalate_now") return badge("ESCALATE NOW", "badge-escalate");
+      if (v === "potential") return badge("POTENTIAL", "badge-potential");
+      return badge("NONE", "badge-none");
+    }
+
+    async function fetchSessions() {
+      try {
+        const res = await fetch(`${API_BASE}/api/sessions`);
+        const data = await res.json();
+
+        // Sort by status (Red > Black > Green) and then by updated_at (newer first)
+        data.sort((a, b) => {
+          const order = { "red": 0, "black": 1, "green": 2 };
+          const aO = (order[a.status] ?? 1);
+          const bO = (order[b.status] ?? 1);
+          if (aO !== bO) return aO - bO;
+
+          const aT = a.updated_at ? Date.parse(a.updated_at) : 0;
+          const bT = b.updated_at ? Date.parse(b.updated_at) : 0;
+          return bT - aT;
+        });
+
+        sessionsDiv.innerHTML = "";
+
+        data.forEach(s => {
+          const row = document.createElement("div");
+          const isActive = currentSessionId === s.session_id ? "active" : "";
+          row.className = `session ${isActive}`;
+          row.onclick = () => showSessionDetails(s.session_id);
+
+          const dot = document.createElement("div");
+          dot.className = "status-dot " + statusClass(s.status);
+
+          const info = document.createElement("div");
+          info.className = "session-info";
+
+          const id = document.createElement("div");
+          id.className = "session-id";
+          id.textContent = s.session_id;
+
+          const meta = document.createElement("div");
+          meta.className = "session-meta";
+
+          const lastActive = s.updated_at
+            ? new Date(s.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : "now";
+
+          meta.innerHTML = `
+            ${getEscalationBadge(s.conversation_escalation || s.escalation)}
+            ${getCriticalityBadge(s.criticality)}
+            <span>${s.emotion || "Neutral"}</span>
+            <span style="margin-left:auto; color:#9ca3af;">${lastActive}</span>
+          `;
+
+          info.appendChild(id);
+          info.appendChild(meta);
+
+          row.appendChild(dot);
+          row.appendChild(info);
+
+          sessionsDiv.appendChild(row);
+        });
+      } catch (e) {
+        console.error("Failed to fetch sessions", e);
+      }
+    }
+
+    async function showSessionDetails(sessionId) {
+      currentSessionId = sessionId;
+
+      document.querySelectorAll('.session').forEach(el => el.classList.remove('active'));
+
+      try {
+        const res = await fetch(`${API_BASE}/api/sessions/${sessionId}`);
+        const s = await res.json();
+
+        emptyState.style.display = "none";
+        dashboardView.style.display = "flex";
+
+        // Header
+        viewSessionId.textContent = `Session: ${sessionId}`;
+        viewLastUpdated.textContent = `Last active: ${s.updated_at || "Just now"}`;
+
+        // Metrics
+        const critScore = (s.criticality_score !== undefined && s.criticality_score !== null)
+          ? Number(s.criticality_score).toFixed(2)
+          : null;
+
+        viewCriticality.textContent = critScore ? critScore : (s.criticality || "N/A");
+
+        const isHigh = (String(s.criticality).toLowerCase() === "high") || (critScore && Number(critScore) > 0.7);
+        viewCriticality.style.color = isHigh ? "#ef4444" : "#111827";
+
+        viewEmotion.textContent = s.emotion || "N/A";
+
+        const convCrit = s.conversation_criticality || "unknown";
+        const convScore = (s.conversation_criticality_score !== undefined && s.conversation_criticality_score !== null)
+          ? Number(s.conversation_criticality_score).toFixed(2)
+          : null;
+
+        const convEsc = s.conversation_escalation || s.escalation || "none";
+        const sent = s.sentiment || "n/a";
+
+        viewRisk.textContent = `${convCrit}${convScore ? ` (${convScore})` : ""} • ${convEsc} • ${sent}`;
+
+        // Signals tab
+        if (viewSignals) viewSignals.textContent = JSON.stringify(s, null, 2);
+
+        // Transcript
+        viewChatArea.innerHTML = "";
+
+        if (s.last_user_message) {
+          const userBubble = document.createElement("div");
+          userBubble.className = "chat-bubble chat-user";
+          userBubble.textContent = s.last_user_message;
+          viewChatArea.appendChild(userBubble);
+        }
+
+        if (s.last_bot_message) {
+          const botBubble = document.createElement("div");
+          botBubble.className = "chat-bubble chat-bot";
+          botBubble.textContent = s.last_bot_message;
+          viewChatArea.appendChild(botBubble);
+        }
+
+        if (!s.last_user_message && !s.last_bot_message) {
+          viewChatArea.innerHTML = `<div class="timestamp">No messages yet.</div>`;
+        }
+
+      } catch (e) {
+        console.error("Error loading details", e);
+        viewChatArea.innerHTML = `<div style="text-align:center; color:red; margin-top:20px;">Failed to load conversation details.</div>`;
+      }
+    }
+
+    async function markResolved() {
+      if (!currentSessionId) return;
+
+      try {
+        await fetch(`${API_BASE}/api/sessions/${currentSessionId}/resolve`, { method: "POST" });
+        fetchSessions();
+        showSessionDetails(currentSessionId);
+      } catch (e) {
+        console.error("Failed to mark resolved", e);
+      }
+    }
+
+    // Tabs
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+
+        btn.classList.add("active");
+        document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
+      });
+    });
+
+    // Initial Load & Polling
+    fetchSessions();
+    setInterval(fetchSessions, 2000);
+  </script>
+</body>
+</html>

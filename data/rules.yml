@@ -24,6 +24,7 @@ rules:
     - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: utter_shipping_times
     - action: utter_ask_conversation_feedback
 
@@ -33,6 +34,7 @@ rules:
     - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: utter_store_hours
     - action: utter_ask_conversation_feedback
 
@@ -42,6 +44,7 @@ rules:
     - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: utter_faq_refund_window
     - action: utter_ask_conversation_feedback
 
@@ -50,6 +53,7 @@ rules:
     - intent: faq_contact_channels
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: utter_faq_contact_channels
     - action: utter_ask_conversation_feedback
 
@@ -66,7 +70,9 @@ rules:
     - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: action_request_handoff
+    - action: action_push_state_to_dashboard
     - action: utter_handoff_ack
 
 - rule: Urgent goes to human
@@ -74,7 +80,9 @@ rules:
     - intent: urgent_contact
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: action_request_handoff
+    - action: action_push_state_to_dashboard
     - action: utter_handoff_ack
 
 # --- Fallback and Uncertainty Rules (Consolidated) ---
@@ -83,6 +91,7 @@ rules:
     - intent: nlu_fallback
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: utter_default
     - action: action_mark_fallback
     - action: action_soft_affirmation
@@ -114,6 +123,7 @@ rules:
     - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: order_status_form
     - active_loop: order_status_form
 
@@ -123,6 +133,7 @@ rules:
     - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: action_clear_context
     - action: cancel_order_form
     - active_loop: cancel_order_form
@@ -154,6 +165,7 @@ rules:
     - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: return_form
     - active_loop: return_form
 - rule: Submit return form
@@ -202,6 +214,7 @@ rules:
     - active_loop: null
     - action: action_clear_context
     - action: action_request_handoff
+    - action: action_push_state_to_dashboard
     - action: utter_handoff_ack
 
 - rule: Interrupt reset form for order status
@@ -234,6 +247,7 @@ rules:
     - intent: no_order_id
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: action_deactivate_loop
     - active_loop: null
     - action: action_clear_context
@@ -247,6 +261,7 @@ rules:
     - intent: no_order_id
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: action_deactivate_loop
     - active_loop: null
     - action: action_clear_context
@@ -261,6 +276,7 @@ rules:
     - intent: no_order_id
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: action_deactivate_loop
     - active_loop: null
     - action: action_clear_context
@@ -275,6 +291,7 @@ rules:
     - intent: no_order_id
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: action_deactivate_loop
     - active_loop: null
     - action: action_clear_context
@@ -289,6 +306,7 @@ rules:
     - intent: no_order_id
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: action_deactivate_loop
     - active_loop: null
     - action: action_clear_context
@@ -306,6 +324,7 @@ rules:
     - intent: chitchat
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: utter_chitchat
 - rule: Submit damage report
   condition:
@@ -346,6 +365,7 @@ rules:
     - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: action_clear_context
     - action: address_update_form
     - active_loop: address_update_form
@@ -381,6 +401,7 @@ rules:
     - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: action_clear_context
     - action: utter_ack_damage
     - action: damage_report_form
@@ -391,6 +412,7 @@ rules:
     - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: utter_ack_positive_feedback
     - action: utter_welcome_menu
 
@@ -400,6 +422,7 @@ rules:
     - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: utter_ack_negative_feedback
     - action: utter_welcome_menu
 - rule: Handle out of scope (general)
@@ -408,6 +431,7 @@ rules:
     - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: utter_oos_generic
     - action: utter_welcome_menu
 - rule: Handle out of scope (personal distress)
@@ -415,6 +439,7 @@ rules:
     - intent: out_of_scope_personal_distress
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: utter_oos_personal_condolences
     - action: utter_welcome_menu
 - rule: Handle conversation feedback and export
@@ -437,6 +462,7 @@ rules:
     - action: utter_show_empathy
     - action: utter_escalation_banner
     - action: action_escalate_now
+    - action: action_push_state_to_dashboard
 
 
 # When conversation-level risk says escalate_now
@@ -448,6 +474,7 @@ rules:
     - action: utter_show_empathy
     - action: utter_escalation_banner
     - action: action_escalate_now
+    - action: action_push_state_to_dashboard
 # When conversation-level risk is "potential" → gentle empathy + offer handoff
 - rule: Offer handoff when conversation-level is potential
   condition:
@@ -553,6 +580,7 @@ rules:
     - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
     - action: action_clear_context
     - action: password_reset_form
     - active_loop: password_reset_form
@@ -603,42 +631,4 @@ rules:
   steps:
     - action: action_escalate_now
     - action: action_export_conversation_summary
-###############################################
-# Example: generic update after risk computation
-# - rule: Update dashboard after risk update
-#   steps:
-#     - action: action_infer_emotion
-#     - action: action_update_conversation_risk
-#     - action: action_push_state_to_dashboard
-# - rule: After explicit escalation, update dashboard
-#   steps:
-#     - action: action_escalate_now
-#     - action: action_push_state_to_dashboard
-
-# - rule: After offer handoff, update dashboard
-#   steps:
-#     - action: action_offer_handoff
-#     - action: action_push_state_to_dashboard
-
-# - rule: After user requests handoff, update dashboard
-#   steps:
-#     - action: action_request_handoff
-#     - action: action_push_state_to_dashboard
-
-# - rule: After clearing context, update dashboard
-#   steps:
-#     - action: action_clear_context
-#     - action: action_push_state_to_dashboard
-
-# - rule: After mark fallback, update dashboard
-#   steps:
-#     - action: action_mark_fallback
-#     - action: action_push_state_to_dashboard
-# - rule: On session start, register conversation on dashboard
-#   steps:
-#     - action: action_session_start
-#     - action: action_push_state_to_dashboard
-# - rule: After storing feedback, final update to dashboard
-#   steps:
-#     - action: action_store_feedback_and_export
-#     - action: action_push_state_to_dashboard
+    - action: action_push_state_to_dashboard

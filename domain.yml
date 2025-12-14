@@ -539,7 +539,7 @@ actions:
   - action_export_conversation_summary
   - action_mark_fallback
   - action_store_feedback_and_export  
-  # - action_push_state_to_dashboard
+  - action_push_state_to_dashboard
 
 forms:
   confirm_reuse_address_form:
