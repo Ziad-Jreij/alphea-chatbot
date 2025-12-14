@@ -453,7 +453,7 @@ responses:
           payload: "/talk_to_human"
 
   utter_faq_contact_channels:
-    - text:|
+    - text: |
         We’re here to help 😊  
         You can reach our support team using any of the options below:
 
