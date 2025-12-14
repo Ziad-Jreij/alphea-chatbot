@@ -1042,7 +1042,7 @@ class ActionRecordDamageTicket(Action):
         events: List[EventType] = [
             SlotSet("issue_description", None),
             SlotSet("order_id", None),
-            SlotSet("resolution_status", "resolved"),
+            SlotSet("resolution_status", "escalated"),
         ]
         export_events = ActionExportConversationSummary().run(
             dispatcher, tracker, domain

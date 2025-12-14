@@ -22,3 +22,8 @@ c84dffca7fbe4c62891ec2f09396ebdc,"I love the new delivery tracker, but the drive
 f3b712601eff4f2eac26dfcb0d8cbd36,I change my mind. bad experience with the product,overall experience,,bad,negative,0.7,Overall_Experience,disappointment
 527996c73c6d4642b0a0bdd422401b1b,"""The battery life is fantastic, but the camera is just average.""",camera,camera,just average,neutral,0.95,Features,curiosity
 527996c73c6d4642b0a0bdd422401b1b,"""The battery life is fantastic, but the camera is just average.""",battery life,battery life,fantastic,positive,0.95,Performance,curiosity
+cb53f7ae258e49679876a911f67e0907,"I love the new design, though the price is a little too high.",price,price,a little too high,negative,0.95,Cost,
+cb53f7ae258e49679876a911f67e0907,"I love the new design, though the price is a little too high.",design,design,love,positive,0.95,Aesthetics,
+3be70e55cfdd471fb10895572b4bbad7,"""The app is buggy and crashes often. The support team was unhelpful.""",app experience,The app,buggy,negative,0.95,Digital_Experience,annoyance
+3be70e55cfdd471fb10895572b4bbad7,"""The app is buggy and crashes often. The support team was unhelpful.""",customer support,support team,unhelpful,negative,0.95,Service,annoyance
+a2efd65bcf8c4e2ca401069d4c0f3579,dented corner,overall experience,,,negative,0.7,Overall_Experience,embarrassment

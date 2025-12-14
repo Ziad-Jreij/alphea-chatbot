@@ -25,6 +25,7 @@ rules:
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: utter_shipping_times
+    - action: utter_ask_conversation_feedback
 
 - rule: Respond to Store hours
   steps:
@@ -33,6 +34,7 @@ rules:
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: utter_store_hours
+    - action: utter_ask_conversation_feedback
 
 - rule: Respond to Refund policy
   steps:
@@ -41,6 +43,7 @@ rules:
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: utter_faq_refund_window
+    - action: utter_ask_conversation_feedback
 
 - rule: Respond to contact channels FAQ
   steps:
@@ -48,6 +51,7 @@ rules:
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: utter_faq_contact_channels
+    - action: utter_ask_conversation_feedback
 
 - rule: Handle generic FAQ intent
   steps:
