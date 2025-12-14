@@ -55,3 +55,8 @@ fb88a6582bb34c3789f7f6f99731479e,2025-12-14T00:38:50.302452,report_damaged_produ
 527996c73c6d4642b0a0bdd422401b1b,2025-12-14T01:12:10.551994,report_damaged_product,resolved,neutral,no,9,26,excellent
 3be70e55cfdd471fb10895572b4bbad7,2025-12-14T01:30:20.895383,start_return,resolved,neutral,no,8,35,bad
 a2efd65bcf8c4e2ca401069d4c0f3579,2025-12-14T01:31:41.682910,report_damaged_product,resolved,neutral,no,18,266,very_bad
+06778a9b65f14f63a69f45571b6578e6,2025-12-14T01:47:09.013427,ask_order_status,resolved,neutral,no,12,44,very_bad
+8723827121e74d519544eaba9ddbfa64,2025-12-14T01:48:07.983098,unknown,unknown,neutral,no,4,28,excellent
+c935a776adc246f38af75a32e8855baf,2025-12-14T01:51:05.631583,ask_order_status,resolved,neutral,no,6,10,excellent
+db3488d3bd5b41abbe1a822cd95d1065,2025-12-14T01:51:34.916238,report_damaged_product,escalated,neutral,no,9,27,excellent
+342c6d0d21c74065a03c59477fb1abd0,2025-12-14T01:52:41.559531,ask_order_status,resolved,neutral,no,12,40,bad

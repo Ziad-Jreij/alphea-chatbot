@@ -520,6 +520,7 @@ rules:
   steps:
     - intent: nlu_fallback
     - action: utter_email_invalid
+    - action: action_export_conversation_summary
 
 # Invalid email while in order_lookup_by_email_form
 - rule: Invalid email during lookup-by-email form
@@ -528,6 +529,7 @@ rules:
   steps:
     - intent: nlu_fallback
     - action: utter_email_invalid
+    - action: action_export_conversation_summary
 # Invalid order ID while checking order status
 - rule: Invalid order ID during order status form
   condition:
@@ -535,6 +537,7 @@ rules:
   steps:
     - intent: nlu_fallback
     - action: utter_order_id_invalid
+    - action: action_export_conversation_summary
 
 # Invalid order ID while reporting damage
 - rule: Invalid order ID during damage report form
@@ -543,6 +546,7 @@ rules:
   steps:
     - intent: nlu_fallback
     - action: utter_order_id_invalid
+    - action: action_export_conversation_summary
 - rule: Activate password reset form
   steps:
     - intent: reset_password
