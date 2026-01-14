@@ -1,143 +1,158 @@
-Customer-Service-Chatbot
-A real-time, intelligent customer support assistant with advanced NLP understanding, emotion awareness, and human-agent collaboration.
+# Customer-Service-Chatbot 🤖
 
-Overview
+A **real-time intelligent customer support assistant** with advanced NLP understanding, emotion awareness, criticality detection, and human-agent collaboration.
 
-This project develops a smart customer-service chatbot capable of understanding how the customer feels, how critical their situation is, what topics they are talking about, and when to involve a human agent.
-It combines Emotion Detection, Sentiment Analysis, Criticality Classification, Automatic Escalation, and Aspect-Based Sentiment Analysis (ABSA) into one unified system.
+---
 
-Why this project is novel
+## 📌 Overview
 
-While many chatbots can classify intent or detect basic sentiment, no existing work combines all four capabilities in real-time to guide human-agent escalation.
-This project is the first to integrate:
+This project implements a smart customer-service chatbot capable of understanding:
 
-Fine-grained emotion understanding (GoEmotions-based)
+- **How the customer feels** (emotion & sentiment),
+- **How critical the situation is**, independently of emotion,
+- **What topics and product/service aspects are being discussed**, and
+- **When a human agent should be involved**.
 
-Criticality scoring that is independent of emotion
+The system combines **Emotion Detection**, **Criticality Classification**, **Aspect-Based Sentiment Analysis (ABSA)**, and **Automatic Human Escalation** into a single, unified, and explainable real-time pipeline.
 
-Rule-based and model-based escalation mapping
+---
 
-Aspect-level analysis of products/services
+## 🚀 Why This Project Is Novel
 
-A live dashboard to help human agents see risk, emotions, and escalation triggers
+While many chatbots focus on intent recognition or basic sentiment analysis, existing systems do not combine **emotion awareness, criticality assessment, escalation logic, and aspect-level analysis** in real time to guide human-agent intervention.
 
-Two automatically generated datasets for future analytics and business insights
+This project uniquely integrates:
 
-Together, these create a system that does not just “chat”, but monitors the conversation, protects users during high-risk cases, and gives companies a powerful way to analyze customer experience.
+- Fine-grained **emotion detection** (GoEmotions-based)
+- **Criticality scoring independent of emotion**
+- Hybrid **rule-based and model-based escalation**
+- **Aspect-level sentiment analysis** for products and services
+- A **real-time dashboard** for human agents
+- **Two automatically generated datasets** for analytics and business insights
 
-Key Features
-🔹 1. Emotion & Sentiment Detection
+Together, these components form a system that does not simply “chat”, but **monitors conversation risk, protects users in high-critical situations, and enables data-driven customer experience analysis**.
 
-Built using a pre-trained model on the GoEmotions dataset
+---
 
-Extracts the top emotion, sentiment, and confidence scores
+## ✨ Key Features
 
-Helps understand customer attitude (e.g., confusion, joy, annoyance, fear)
+### 🔹 1. Emotion & Sentiment Detection
+- Built using a pre-trained model fine-tuned on the **GoEmotions dataset**
+- Extracts dominant emotion, sentiment polarity, and confidence scores
+- Helps interpret customer attitudes such as confusion, frustration, joy, or fear
 
-🔹 2. Criticality Classification
+---
 
-Zero-shot classification to detect whether a message is Low, Medium, or High critical
+### 🔹 2. Criticality Classification
+- Zero-shot classification of messages into **Low**, **Medium**, or **High** criticality
+- Works even when sentiment is neutral or positive by focusing on semantic meaning
 
-Works even when the sentiment is positive or ambiguous, by focusing on the meaning
+**Example:**
+> “I think someone stole my credit card.”  
+> → Neutral emotion, **High criticality**
 
-Example:
+---
 
-“I think someone stole my credit card.” → Neutral emotion but High criticality
+### 🔹 3. Smart Escalation to Human Agents
+- Maps criticality levels to escalation strategies
+- Supports:
+  - Immediate escalation
+  - Delayed escalation
+  - Monitoring without escalation
+- Escalation decisions are **explainable** (emotion, criticality, chatbot uncertainty)
 
-🔹 3. Smart Escalation to Human Agents
+---
 
-Maps criticality levels to escalation rules
+### 🔹 4. Aspect-Based Sentiment Analysis (ABSA)
+- Extracts specific product or service aspects from user messages
+- Assigns sentiment per aspect
+- Supports multi-aspect messages
+- Provides detailed feedback beyond overall sentiment
 
-Can trigger:
+---
 
-Immediate escalation
+### 🔹 5. Human-Agent Dashboard
+- Displays conversations in real time
+- Shows emotion timeline, criticality score, escalation triggers, and conversation risk
+- Enables agents to prioritize high-risk cases efficiently
 
-Delayed escalation
+---
 
-Monitoring without escalation
+## 📊 Automatically Generated Datasets
 
-Human agents can see why escalation happened (emotion, criticality, chatbot uncertainty…)
+### 🗂️ 1. Conversation-Level Dataset
 
-🔹 4. Aspect-Based Sentiment Analysis (ABSA)
+Each conversation is stored as a single row with fields such as:
 
-Extracts specific product or service aspects mentioned by the user
+- `conversation_id`
+- `time`
+- `conversation_risk`
+- `overall_emotion`
+- `escalated` (yes/no)
+- `conversation_duration`
+- `number_of_messages`
 
-Detects sentiment per aspect
+**Example insights:**
+- Peak hours with high-risk conversations
+- Escalation frequency and causes
+- Emotion–risk correlations
+- Customer satisfaction prediction using emotion and risk patterns
 
-Supports multi-aspect messages
-
-Helps companies understand detailed customer feedback beyond “overall sentiment”
-
-🔹 5. Human-Agent Dashboard
-
-Shows conversations in real time
-
-Displays:
-
-Emotion timeline
-
-Criticality score
-
-Escalation triggers
-
-Conversation risk score
-
-Helps agents quickly prioritize high-risk customers
-
-Automatically Generated Datasets
-
-The system produces two datasets that companies can use for analytics, reporting, and long-term decision-making.
-
-1. Conversation-Level Dataset
-
-Each conversation becomes one row with columns such as:
-
-conversation_id
-
-time
-
-conversation_risk
-
-overall_emotion
-
-escalated (yes/no)
-
-conversation_duration
-
-number_of_messages
-
-Insights companies can extract:
-
-Peak hours with most high-risk conversations
-
-How many conversations were escalated and why
-
-Correlation between emotion patterns and customer churn
-
-Customer satisfaction prediction using risk + emotion patterns
-
-2. ABSA-Level Dataset
-
-Each aspect mentioned in the conversation becomes one entry:
-
-conversation_id
-
-aspect (e.g., battery life, delivery time, screen quality…)
-
-aspect_sentiment (positive, neutral, negative…)
-
-confidence_score
-
-emotion
-
-category (Features, Cost, Performance, Support…)
-
-Insights companies can extract:
-
-Which product features customers praise or complain about
-
-Aspect-level satisfaction (e.g., “Battery Life is the #1 complaint”)
-
-Emotion trends per product category
-
-Prioritization for product improvements
+---
+
+### 🗂️ 2. ABSA-Level Dataset
+
+Each detected aspect becomes a separate entry:
+
+- `conversation_id`
+- `aspect`
+- `aspect_sentiment` (positive / neutral / negative)
+- `confidence_score`
+- `emotion`
+- `category` (Features, Cost, Performance, Support…)
+
+**Example insights:**
+- Most complained-about product features
+- Aspect-level satisfaction analysis
+- Emotion trends by product category
+- Product improvement prioritization
+
+---
+
+## 🛠️ Running the Project
+
+### 1️⃣ Activate the Virtual Environment
+```bash
+source .venv/bin/activate
+```
+## 2️⃣ Train the Rasa Model
+
+```bash
+rasa data validate
+rasa train
+```
+## 3️⃣ Run the System (Multiple Terminals)
+
+### Terminal A – Action Server
+```bash
+rasa run actions
+```
+### Terminal B – Rasa Server
+```bash
+rasa run --enable-api --cors "*" --debug
+```
+### Terminal C – Web Chat Interface
+```bash
+python3 -m http.server 8000
+```
+Open in your browser:
+
+http://127.0.0.1:8000/webchat.html
+
+### Terminal D – Dashboard Backend
+```bash
+python3 dashboard_backend.py
+```
+Open in your browser:
+
+http://127.0.0.1:8000/dashboard.html
