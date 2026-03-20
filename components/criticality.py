@@ -288,7 +288,7 @@ _crit_lock = Lock()
 _crit_pipe = None
 
 # Deterministic mapping to escalation
-ESCALATION_MAP = {"low": "None", "medium": "Potential", "high": "Escalate Now"}
+ESCALATION_MAP = {"low":"none","medium":"potential","high":"escalate_now"}
 
 # Emotion -> prior (log-odds) weights toward urgency
 EMOTION_WEIGHTS: Dict[str, Dict[str, float]] = {
@@ -423,15 +423,15 @@ def infer_criticality_for_text(
 
     source = "model" + rule_suffix
 
-    logger.info(
-        "[criticality] text=%r -> level=%s score=%.2f esc=%s source=%s kw=%s",
-        text,
-        level,
-        score,
-        escalation,
-        source,
-        rule_match,
-    )
+    # logger.info(
+    #     "[criticality] text=%r -> level=%s score=%.2f esc=%s source=%s kw=%s",
+    #     text,
+    #     level,
+    #     score,
+    #     escalation,
+    #     source,
+    #     rule_match,
+    # )
 
     return {
         "criticality_level": level,

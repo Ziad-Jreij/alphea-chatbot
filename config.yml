@@ -15,7 +15,7 @@ pipeline:
     model_name: "bert"
     model_weights: "bert-base-uncased"
   - name: DIETClassifier
-    epochs: 120
+    epochs: 75
     constrain_similarities: true
   - name: EntitySynonymMapper
   - name: ResponseSelector

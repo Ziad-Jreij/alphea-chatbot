@@ -371,7 +371,7 @@ responses:
           payload: "/no_order_id"
 
   utter_ask_email:
-    - text: "Sure thing! Just share the email you used for your order and I’ll track it down for you. 🔎🛍️"
+    - text: "Sure thing! Just share the email you used for your order."
       # buttons:
       #   - title: "Use a different email"
       #     payload: "/deny"
@@ -413,8 +413,7 @@ responses:
   # Fallback
   utter_default:
     - text: >
-        I’m not sure I understood that correctly. Could you rephrase it, or choose one
-        of the options below so I can guide you?
+        Is there anything else i can do for you in the meantime? 
       buttons:
         - title: "Track my order"
           payload: "/ask_order_status"

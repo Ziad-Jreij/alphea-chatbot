@@ -51,6 +51,7 @@ rules:
 - rule: Respond to contact channels FAQ
   steps:
     - intent: faq_contact_channels
+    - action: action_set_primary_intent
     - action: action_infer_emotion
     - action: action_update_conversation_risk
     - action: action_push_state_to_dashboard
@@ -74,6 +75,7 @@ rules:
     - action: action_request_handoff
     - action: action_push_state_to_dashboard
     - action: utter_handoff_ack
+    - action: action_listen
 
 - rule: Urgent goes to human
   steps:
@@ -84,6 +86,7 @@ rules:
     - action: action_request_handoff
     - action: action_push_state_to_dashboard
     - action: utter_handoff_ack
+    - action: action_listen
 
 # --- Fallback and Uncertainty Rules (Consolidated) ---
 - rule: NLU fallback (soft)

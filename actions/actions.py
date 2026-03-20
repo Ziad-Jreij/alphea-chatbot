@@ -130,23 +130,23 @@ def _infer_emotion_slots(tracker):
     # 3) Conversation-level risk update (uses ONLY criticality)
     conv_state = _update_conversation_risk(tracker, level, score)
 
-    logger.info(
-        "[form-emotion+crit] text=%r intent=%s -> emo=%s sentiment=%s overall=%s | "
-        "crit_level=%s crit_score=%.2f crit_escalation=%s | conv=%s",
-        text,
-        intent,
-        top_label,
-        sentiment,
-        overall,
-        level,
-        score,
-        escalation,
-        {
-            "conversation_criticality": conv_state["conversation_criticality"],
-            "conversation_criticality_score": conv_state["conversation_criticality_score"],
-            "conversation_escalation": conv_state["conversation_escalation"],
-        },
-    )
+    # logger.info(
+    #     "[form-emotion+crit] text=%r intent=%s -> emo=%s sentiment=%s overall=%s | "
+    #     "crit_level=%s crit_score=%.2f crit_escalation=%s | conv=%s",
+    #     text,
+    #     intent,
+    #     top_label,
+    #     sentiment,
+    #     overall,
+    #     level,
+    #     score,
+    #     escalation,
+    #     {
+    #         "conversation_criticality": conv_state["conversation_criticality"],
+    #         "conversation_criticality_score": conv_state["conversation_criticality_score"],
+    #         "conversation_escalation": conv_state["conversation_escalation"],
+    #     },
+    # )
 
     # 4) ABSA: always run; extractor will decide whether to export
     try:
@@ -200,17 +200,17 @@ def _infer_criticality_slots(text: str, emotion: Optional[str]) -> Dict[Text, An
     source = result.get("source") or "unknown"
     kw = result.get("matched_keyword")
 
-    logger.debug(
-        "[crit] text=%r emo=%s -> level=%s score=%.2f escalation=%s source=%s kw=%s dist=%s",
-        text,
-        (emotion or "none"),
-        level,
-        score,
-        escalation,
-        source,
-        kw,
-        {k: f"{v:.2f}" for k, v in dist.items()},
-    )
+    # logger.debug(
+    #     "[crit] text=%r emo=%s -> level=%s score=%.2f escalation=%s source=%s kw=%s dist=%s",
+    #     text,
+    #     (emotion or "none"),
+    #     level,
+    #     score,
+    #     escalation,
+    #     source,
+    #     kw,
+    #     {k: f"{v:.2f}" for k, v in dist.items()},
+    # )
 
     return {
         "criticality_level": level,

@@ -31,3 +31,38 @@ db3488d3bd5b41abbe1a822cd95d1065,dented corner,overall experience,,,negative,0.7
 300d8986481c46f2865fe98cc2d94da8,my product is damaged,overall experience,,damaged,negative,0.7,Overall_Experience,disappointment
 300d8986481c46f2865fe98cc2d94da8,dented corner,overall experience,,,negative,0.7,Overall_Experience,embarrassment
 328e223b150743d3abfd018ef2f41fbd,my credit card is stolen,overall experience,,,negative,0.7,Overall_Experience,disapproval
+f459f2e36bae430ca094c68a82c20bd8,alex@example.com,overall experience,,,positive,0.7,Overall_Experience,caring
+8139fbc8303347cebd97d5258ab88348,"I changed my mind, I don't want this product anymore",overall experience,,,negative,0.7,Overall_Experience,disapproval
+8139fbc8303347cebd97d5258ab88348,my cresit card is stolen,overall experience,,,negative,0.7,Overall_Experience,disapproval
+47ee0dcecc034a649107920587ba541c,my data was leaked,safety & defects,leak,,neutral,0.5,Reliability,
+3589cbdd81de41c1aa7d48be884c51d9,"the battery life is great, whereas the screen is terrible",battery life,battery life,great,positive,0.95,Performance,annoyance
+8ee95edab3fe44b5947c3a64d11929f9,my account is compromised,overall experience,,,negative,0.7,Overall_Experience,disappointment
+b68faa7e44f341798907b7751d27e8ff,my data was leaked,safety & defects,leak,,negative,0.7,Reliability,embarrassment
+f4af5c6730d24974b47e3bba4809353e,john@example.com,overall experience,,,positive,0.7,Overall_Experience,caring
+492898cb0f0c4d0abeae97bee9dfc468,"The battery life is fantastic, but the camera is just average.",camera,camera,just average,neutral,0.95,Features,curiosity
+492898cb0f0c4d0abeae97bee9dfc468,"The battery life is fantastic, but the camera is just average.",battery life,battery life,fantastic,positive,0.95,Performance,curiosity
+1ea62c3ec3404771be4e2a293ff62022,"I love the new design, though the price is a little too high.",price,price,a little too high,negative,0.95,Cost,admiration
+1ea62c3ec3404771be4e2a293ff62022,"I love the new design, though the price is a little too high.",design,design,love,positive,0.95,Aesthetics,admiration
+79c0b9b311364890826aecf5219bfb19,The app is buggy and crashes often. The support team was unhelpful.,app experience,The app,buggy,negative,0.95,Digital_Experience,annoyance
+79c0b9b311364890826aecf5219bfb19,The app is buggy and crashes often. The support team was unhelpful.,customer support,support team,unhelpful,negative,0.95,Service,annoyance
+79c0b9b311364890826aecf5219bfb19,"This is unacceptable, my order is completely messed up",overall experience,,unacceptable,negative,0.7,Overall_Experience,annoyance
+81926441bc8a420bb092da3e046883a9,alex@example.com,overall experience,,,positive,0.7,Overall_Experience,caring
+81926441bc8a420bb092da3e046883a9,You charged me twice and no one is helping,billing,charge,,negative,0.7,Cost,disappointment
+3e2637e64ff34f27b192ecda3f2f5318,"This is unacceptable, my order is completely messed up",overall experience,,unacceptable,negative,0.7,Overall_Experience,disappointment
+3e2637e64ff34f27b192ecda3f2f5318,"dented corner”, or “missing parts”). This helps the support team",customer support,support team,,positive,0.7,Service,relief
+4a69aa2f62ad4b8fbc2e66ed351ddcf2,You charged me twice and no one is helping,billing,charge,,neutral,0.5,Cost,
+4a69aa2f62ad4b8fbc2e66ed351ddcf2,You charged me twice and no one is helping,billing,charge,,negative,0.7,Cost,disappointment
+4a69aa2f62ad4b8fbc2e66ed351ddcf2,You charged me twice and no one is helping,billing,charge,,negative,0.7,Cost,disappointment
+4a69aa2f62ad4b8fbc2e66ed351ddcf2,alex@example.com,overall experience,,,positive,0.7,Overall_Experience,caring
+4a69aa2f62ad4b8fbc2e66ed351ddcf2,no,overall experience,,,negative,0.7,Overall_Experience,disapproval
+4a69aa2f62ad4b8fbc2e66ed351ddcf2,no,overall experience,,,negative,0.7,Overall_Experience,disapproval
+4a69aa2f62ad4b8fbc2e66ed351ddcf2,This is the worst service I have ever experienced,overall experience,,,negative,0.7,Overall_Experience,disappointment
+5a8ab0ffed2445ad8cbdf168a5539cd4,Your service is terrible and unacceptable,overall experience,,unacceptable,negative,0.7,Overall_Experience,disapproval
+2523c54efd0b4011b1bda9a14a7ed1e8,"this is ridiculous, nothing is working the way it should",overall experience,,ridiculous,negative,0.7,Overall_Experience,sadness
+d70b705dc21b4bf187bafb8dcebe3c8c,my order is so late this is unacceptable,overall experience,,unacceptable,negative,0.7,Overall_Experience,grief
+d70b705dc21b4bf187bafb8dcebe3c8c,your product is so amazing it caught fire last night,safety & defects,caught fire,caught fire,negative,0.95,Reliability,grief
+d70b705dc21b4bf187bafb8dcebe3c8c,i think my credit card was stolen,overall experience,,,negative,0.7,Overall_Experience,grief
+d70b705dc21b4bf187bafb8dcebe3c8c,your product is very good,overall experience,,,negative,0.7,Overall_Experience,grief
+4a1f6fccb8c24dfab3fec41675863417,when will my order arrive?,overall experience,,,negative,0.7,Overall_Experience,disapproval
+4c45ef46a6b24674ac7967143de4078c,i am happy with your product,app experience,app,happy,positive,0.95,Digital_Experience,
+ff00756c2b3c4087bce0b345cd26599d,you sent me a broken item!!!,overall experience,,ok,negative,0.7,Overall_Experience,disappointment
