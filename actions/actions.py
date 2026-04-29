@@ -64,8 +64,115 @@ EMAIL_RE = re.compile(r"[^@]+@[^@]+\.[^@]+")
 logger = logging.getLogger(__name__)
 
 _CRIT2SCORE = {"low": 0.3, "medium": 0.5, "high": 0.75}
-_SCORE2CRIT = lambda s: ("high" if s>=0.65 else "medium" if s>=0.45 else "low")
+# Conversation-level thresholds are intentionally higher than per-turn thresholds.
+# A single medium turn (turn-level score ~0.70) must NOT push the conversation
+# to HIGH — that requires sustained distress across multiple turns.
+_SCORE2CRIT = lambda s: ("high" if s>=0.75 else "medium" if s>=0.50 else "low")
 _ESCALATION_MAP = {"low":"none","medium":"potential","high":"escalate_now"}
+
+# ── Phase 2: in-process ABSA accumulator ────────────────────────────────────
+# _infer_absa_for_latest_user_turn cannot SlotSet (it has no return path), so
+# it writes here; ActionPushStateToDashboard reads and forwards to the backend.
+_absa_cache: Dict[str, list] = {}
+
+
+def _build_absa_insights(rows: list) -> Dict[str, Any]:
+    """
+    Roll up raw aspect rows into a manager-readable insights dict.
+
+    Output structure (per business aspect):
+      {
+        "Customer Support": {
+          "business_aspect": "customer_support",
+          "display":         "Customer Support",
+          "mentions":        5,
+          "positive":        1,
+          "negative":        3,
+          "neutral":         1,
+          "dominant_sentiment": "negative",
+          "top_opinion_terms":  ["rude", "unhelpful", "not helpful"],
+          "mean_confidence":    0.84,
+          "emotions":           {"frustrated": 2, "disappointed": 1},
+        },
+        ...
+      }
+
+    Also includes a top-level "summary" key with the 3 most-mentioned
+    negative business aspects for the dashboard alert strip.
+    """
+    from collections import defaultdict, Counter
+
+    buckets: Dict[str, Dict] = defaultdict(lambda: {
+        "positive": 0, "negative": 0, "neutral": 0,
+        "opinion_terms": [], "confidences": [], "emotions": Counter(),
+        "business_aspect": "", "display": "",
+    })
+
+    for row in rows:
+        biz = row.get("business") or "overall_experience"
+        display = row.get("business_display") or biz.replace("_", " ").title()
+        sent = row.get("sentiment") or "neutral"
+        conf = float(row.get("confidence") or 0.5)
+        opinion = row.get("opinion_term")
+        emotion = row.get("emotion")
+
+        b = buckets[biz]
+        b["business_aspect"] = biz
+        b["display"] = display
+        b[sent] = b.get(sent, 0) + 1
+        if opinion:
+            b["opinion_terms"].append(opinion)
+        b["confidences"].append(conf)
+        if emotion:
+            b["emotions"][emotion] += 1
+
+    result = {}
+    for biz, b in buckets.items():
+        pos = b["positive"]
+        neg = b["negative"]
+        neu = b["neutral"]
+        total = pos + neg + neu
+
+        opinions = b["opinion_terms"]
+        # Deduplicate, keep top-3 most frequent
+        top_opinions = [t for t, _ in Counter(opinions).most_common(3)]
+
+        confs = b["confidences"]
+        mean_conf = round(sum(confs) / len(confs), 3) if confs else 0.0
+
+        dominant = "neutral"
+        if neg > pos and neg >= neu:
+            dominant = "negative"
+        elif pos > neg and pos >= neu:
+            dominant = "positive"
+
+        top_emotion = b["emotions"].most_common(1)[0][0] if b["emotions"] else None
+
+        result[b["display"]] = {
+            "business_aspect":    biz,
+            "display":            b["display"],
+            "mentions":           total,
+            "positive":           pos,
+            "negative":           neg,
+            "neutral":            neu,
+            "dominant_sentiment": dominant,
+            "top_opinion_terms":  top_opinions,
+            "mean_confidence":    mean_conf,
+            "top_emotion":        top_emotion,
+        }
+
+    # Top-3 negative issues for alert strip (sorted by negative count desc)
+    negative_issues = sorted(
+        [(k, v) for k, v in result.items() if v["dominant_sentiment"] == "negative"],
+        key=lambda x: x[1]["negative"],
+        reverse=True,
+    )[:3]
+    result["__summary__"] = {
+        "total_aspects_detected": sum(v["mentions"] for k, v in result.items() if not k.startswith("__")),
+        "top_negative_issues":    [k for k, _ in negative_issues],
+    }
+
+    return result
 ABSA_ENABLED_INTENTS = {
     "product_feedback_positive",
     "product_feedback_negative",
@@ -128,7 +235,11 @@ def _infer_emotion_slots(tracker):
     escalation = crit["escalation"]
 
     # 3) Conversation-level risk update (uses ONLY criticality)
-    conv_state = _update_conversation_risk(tracker, level, score)
+    conv_state = _update_conversation_risk(
+        tracker, level, score,
+        reason_code=crit.get("criticality_reason_code", ""),
+        explanation=crit.get("criticality_explanation", ""),
+    )
 
     # logger.info(
     #     "[form-emotion+crit] text=%r intent=%s -> emo=%s sentiment=%s overall=%s | "
@@ -160,19 +271,23 @@ def _infer_emotion_slots(tracker):
         logger.exception("ABSA analysis failed: %s", e)
 
     out = {
-        # emotion
+        # emotion (business-friendly bucket + smoothing reason)
         "top_emotion": top_label,
         "sentiment": sentiment,
         "emotion_tally": agg["emotion_tally"],
         "emotion_history": agg["emotion_history"],
-        "overall_emotion": overall,
-        # per-turn criticality
+        "overall_emotion": agg.get("overall_emotion"),
+        "emotion_smoothing_reason": agg.get("emotion_smoothing_reason", ""),
+        # per-turn criticality + reason codes
         "criticality_level": level,
         "criticality_score": score,
         "escalation": escalation,
+        "criticality_reason_code": crit.get("criticality_reason_code", ""),
+        "criticality_explanation": crit.get("criticality_explanation", ""),
+        # conversation-level risk (audit fields propagated below)
     }
 
-    # add conversation-level risk slots
+    # add conversation-level risk slots (includes audit_log + false_trigger)
     out.update(conv_state)
     return out
 
@@ -216,74 +331,183 @@ def _infer_criticality_slots(text: str, emotion: Optional[str]) -> Dict[Text, An
         "criticality_level": level,
         "criticality_score": score,
         "escalation": escalation,
+        "criticality_reason_code": result.get("reason_code", ""),    # Task 4
+        "criticality_explanation": result.get("explanation", ""),     # Task 4
     }
 def _update_conversation_risk(
     tracker: Tracker,
     level: str,
     score: float,
+    reason_code: str = "",
+    explanation: str = "",
 ) -> Dict[Text, Any]:
-    """Update conversation-level risk based on this turn's criticality.
-
-    Uses only criticality (level, score), not emotion, for the actual math.
-    Emotion is logged just for observability.
     """
+    Update conversation-level risk based on this turn's criticality.
 
-    # 1) HISTORY & TALLY
-    history = list(tracker.get_slot("criticality_history") or [])
-    tally: Dict[str, int] = dict(tracker.get_slot("criticality_tally") or {})
+    Week 2 additions:
+    ─────────────────
+    Task 2 │ FALSE-TRIGGER PENALTY
+           │ If the previous N turns were all HIGH but the conversation
+           │ subsequently cooled (multiple LOW/MEDIUM turns in a row without
+           │ further high signals), we apply a penalty that pushes the
+           │ aggregated score DOWN, preventing "stuck escalation" and reducing
+           │ alert fatigue.
+           │
+           │ Rule: if the last _FALSE_TRIGGER_GRACE consecutive turns are all
+           │ ≤ medium AND the tally shows prior HIGH turns that never resulted
+           │ in an agent action, we subtract _FALSE_TRIGGER_PENALTY from the
+           │ aggregated score and record a "false_trigger_candidate" flag.
+           │
+    Task 3 │ CONFIDENCE DECAY WHEN CONVERSATION COOLS
+           │ Base decay factor 0.85 (Week 1). Week 2 makes decay ADAPTIVE:
+           │   – If last 3 turns are all LOW  → decay = 0.70 (fast cooling)
+           │   – If last 3 turns are all HIGH → decay = 0.95 (slow cooling)
+           │   – Otherwise                   → decay = 0.85 (baseline)
+           │ This means a single early HIGH does not hold the conversation
+           │ score elevated forever; it fades appropriately.
+           │
+    Task 4 │ ESCALATION AUDIT TRAIL
+           │ Every turn appends a structured event to `escalation_audit_log`
+           │ (a slot that persists for the session). Each event records:
+           │   timestamp, turn, level, score, escalation, reason_code,
+           │   explanation, source, matched_keyword, emotion, conv_score.
+           │ The audit log is the backbone of the Escalation Audit Trail output.
+    """
+    import json
+    from datetime import datetime as _dt
+
+    # ── 0) LOAD HISTORY ─────────────────────────────────────────────────────
+    history: List[Dict[str, Any]] = list(tracker.get_slot("criticality_history") or [])
+    tally:   Dict[str, int]       = dict(tracker.get_slot("criticality_tally") or {})
+    audit_log: List[Dict[str, Any]] = list(tracker.get_slot("escalation_audit_log") or [])
+
+    turn_number = len(history) + 1
 
     history.append({"level": level, "score": float(score)})
     history = history[-15:]  # keep last 15 turns
-
     tally[level] = tally.get(level, 0) + 1
 
-    # 2) CONVERSATION-LEVEL SCORE (decayed)
-    w = 1.0
+    # ── 1) ADAPTIVE DECAY (Task 3) ───────────────────────────────────────────
+    recent3 = [h.get("level") for h in history[-3:]]
+    if all(l == "low" for l in recent3):
+        decay = 0.70   # conversation clearly cooled → fast decay
+    elif all(l == "high" for l in recent3):
+        decay = 0.95   # sustained distress → slow decay (don't dismiss too fast)
+    else:
+        decay = 0.85   # baseline
+
+    w      = 1.0
     total_w = 0.0
-    agg = 0.0
+    agg    = 0.0
     for item in reversed(history):
         s = float(item.get("score", 0.0))
-        agg += w * s
+        agg    += w * s
         total_w += w
-        w *= 0.85  # decay
+        w      *= decay
 
     conv_score = agg / max(total_w, 1e-9)
-    conv_level = _SCORE2CRIT(conv_score)
+
+    # ── 2) FALSE-TRIGGER PENALTY (Task 2) ────────────────────────────────────
+    # Grace period: how many consecutive non-HIGH turns before we penalise a
+    # prior high that was never confirmed by an agent action.
+    _FALSE_TRIGGER_GRACE   = 4    # consecutive LOW/MEDIUM turns
+    _FALSE_TRIGGER_PENALTY = 0.12  # flat subtraction from conv_score
+
+    false_trigger_candidate = False
+    recent_levels = [h.get("level") for h in history[-_FALSE_TRIGGER_GRACE:]]
+    prior_high = tally.get("high", 0)
+    agent_acted = bool(tracker.get_slot("handoff_requested"))
+
+    if (
+        len(recent_levels) == _FALSE_TRIGGER_GRACE
+        and all(l in ("low", "medium") for l in recent_levels)
+        and prior_high > 0
+        and not agent_acted
+    ):
+        conv_score = max(0.0, conv_score - _FALSE_TRIGGER_PENALTY)
+        false_trigger_candidate = True
+        logger.info(
+            "[conv-risk] FALSE_TRIGGER_PENALTY applied: "
+            "prior_high=%d grace_turns=%s new_conv_score=%.2f session=%s",
+            prior_high, recent_levels, conv_score, tracker.sender_id,
+        )
+
+    # ── 3) MAP SCORE → LEVEL ─────────────────────────────────────────────────
+    conv_level     = _SCORE2CRIT(conv_score)
     conv_escalation = _ESCALATION_MAP[conv_level]
 
-    # 3) Guardrail: any high in history → force escalate_now
-    if any(h.get("level") == "high" for h in history):
+    # Guardrail: only lock in escalate_now if there was a genuine per-turn HIGH
+    # (not just conv_score drift from accumulated medium turns).
+    # false_trigger_candidate cancels this lock.
+    prior_turn_highs = [h for h in history if h.get("level") == "high"]
+    if prior_turn_highs and not false_trigger_candidate:
         conv_escalation = "escalate_now"
-        conv_level = "high"
-        conv_score = max(conv_score, 0.9)
+        conv_level      = "high"
+        conv_score      = max(conv_score, 0.9)
 
-    # 4) LOGGING
-    text = (tracker.latest_message.get("text") or "").strip()
-    emo = (tracker.get_slot("top_emotion") or "unknown")
-    sentiment = (tracker.get_slot("sentiment") or "ambiguous")
+    # ── 4) ESCALATION AUDIT LOG (Task 4) ─────────────────────────────────────
+    # Every turn is logged. Dashboard / ops team can filter on escalation != "none".
+    emo   = tracker.get_slot("top_emotion") or "unknown"
+    text  = (tracker.latest_message.get("text") or "").strip()
 
-    logger.info(
-        "[conv-risk] conv=%s text=%r emo=%s sentiment=%s | "
-        "turn_level=%s turn_score=%.2f | "
-        "conv_level=%s conv_score=%.2f conv_escalation=%s history=%s",
-        tracker.sender_id,
-        text,
-        emo,
-        sentiment,
-        level,
-        float(score),
-        conv_level,
-        conv_score,
-        conv_escalation,
-        [h.get("level") for h in history][-5:],
-    )
+    audit_event: Dict[str, Any] = {
+        "ts":              _dt.utcnow().isoformat(timespec="seconds") + "Z",
+        "session_id":      tracker.sender_id,
+        "turn":            turn_number,
+        # Turn-level signal
+        "turn_level":      level,
+        "turn_score":      round(float(score), 3),
+        "turn_escalation": _ESCALATION_MAP.get(level, "none"),
+        # Conversation-level aggregated signal
+        "conv_level":      conv_level,
+        "conv_score":      round(conv_score, 3),
+        "conv_escalation": conv_escalation,
+        # Explainability (from Week 1)
+        "reason_code":     reason_code,
+        "explanation":     explanation,
+        # Context
+        "emotion":         emo,
+        "text_preview":    text[:120],
+        # Week 2 metadata
+        "decay_used":      decay,
+        "false_trigger_candidate": false_trigger_candidate,
+        "history_snapshot": [h.get("level") for h in history[-5:]],
+    }
+    audit_log.append(audit_event)
+    audit_log = audit_log[-50:]  # keep last 50 events per session
+
+    # Structured log line — one grep-able line per escalation event
+    if conv_escalation != "none" or level == "high":
+        logger.info(
+            "[ESCALATION_AUDIT] session=%s turn=%d "
+            "turn_level=%s turn_score=%.2f "
+            "conv_level=%s conv_score=%.2f conv_esc=%s "
+            "reason=%s decay=%.2f false_trigger=%s emotion=%s text=%r",
+            tracker.sender_id,
+            turn_number,
+            level, float(score),
+            conv_level, conv_score, conv_escalation,
+            reason_code,
+            decay,
+            false_trigger_candidate,
+            emo,
+            text[:80],
+        )
+    else:
+        logger.debug(
+            "[conv-risk] session=%s turn=%d level=%s score=%.2f conv=%s/%.2f decay=%.2f",
+            tracker.sender_id, turn_number, level, float(score),
+            conv_level, conv_score, decay,
+        )
 
     return {
-        "criticality_history": history,
-        "criticality_tally": tally,
+        "criticality_history":     history,
+        "criticality_tally":       tally,
         "conversation_criticality": conv_level,
         "conversation_criticality_score": conv_score,
         "conversation_escalation": conv_escalation,
+        "escalation_audit_log":    audit_log,            # Task 4
+        "false_trigger_candidate": false_trigger_candidate,  # Task 2
     }
 def _best_overall_from_tally(tally: Dict[str, int], last_top: str) -> str:
     if not tally:
@@ -294,24 +518,43 @@ def _best_overall_from_tally(tally: Dict[str, int], last_top: str) -> str:
     return last_top if last_top in candidates else sorted(candidates)[0]
 
 def _merge_emotion_aggregate(tracker, new_label):
-    tally = tracker.get_slot("emotion_tally") or {}
-    history = tracker.get_slot("emotion_history") or []
+    """
+    Week 1 Task 2: Rolling emotion smoothing per session.
+
+    Applies a recency-weighted window (last 4 turns) so a single ambiguous
+    message cannot flip the displayed emotion label. Uses the smooth_emotion()
+    function from emotion.py.
+    """
+    from components.emotion import smooth_emotion, BUSINESS_EMOTION_DISPLAY
+
+    tally   = tracker.get_slot("emotion_tally") or {}
+    history = list(tracker.get_slot("emotion_history") or [])
 
     tally[new_label] = tally.get(new_label, 0) + 1
 
-    history.append(new_label)
+    # Apply smoothing BEFORE appending so history = prior turns
+    smoothed_label, smooth_reason = smooth_emotion(new_label, history)
+
+    history.append(smoothed_label)   # store smoothed value in history
     if len(history) > 10:
         history.pop(0)
 
-    weights = {}
-    for i, e in enumerate(reversed(history)):
-        weights[e] = weights.get(e, 0) + (1 / (i + 1))
+    # overall_emotion = smoothed label for this turn
+    overall = smoothed_label
 
-    overall = max(weights.items(), key=lambda x: x[1])[0]
+    logger.debug(
+        "[emotion-smooth] raw=%s smoothed=%s reason=%s history=%s",
+        new_label,
+        smoothed_label,
+        smooth_reason,
+        history[-4:],
+    )
+
     return {
         "emotion_tally": tally,
         "emotion_history": history,
         "overall_emotion": overall,
+        "emotion_smoothing_reason": smooth_reason,   # reason code for transparency
     }
 #ABSA #############HELPER FUNCTIONS#####################
 def _build_absa_rows_for_message(
@@ -323,9 +566,12 @@ def _build_absa_rows_for_message(
     """
     Convert aspect-opinion extraction results + current message into CSV rows.
 
-    Dataset schema:
+    Dataset schema (Phase 2 additions marked with *):
       Session_ID, Original_Text, Aspect, Aspect_Term, Opinion_Term,
-      Aspect_Sentiment, Confidence, Category, Emotion
+      Aspect_Sentiment, Confidence, Category,
+      Business_Aspect*, Business_Aspect_Display*,   ← manager-level roll-up
+      Match_Type*, Similarity*,                     ← explainability fields
+      Emotion
     """
     original_text = (text or "").strip()
     if not original_text or not aspects:
@@ -337,17 +583,23 @@ def _build_absa_rows_for_message(
     for a in aspects:
         rows.append(
             {
-                "Session_ID": session_id,
-                "Original_Text": original_text,
-                # canonical name from ASPECT_SPECS["name"]
-                "Aspect": a.get("aspect"),
-                # surface phrase from the message
-                "Aspect_Term": a.get("aspect_term"),
-                "Opinion_Term": a.get("opinion_term"),
-                "Aspect_Sentiment": a.get("aspect_sentiment"),
-                "Confidence": a.get("aspect_sentiment_confidence"),
-                "Category": a.get("aspect_category"),
-                "Emotion": emotion_label,
+                "Session_ID":             session_id,
+                "Original_Text":          original_text,
+                # Fine-grained aspect (unchanged)
+                "Aspect":                 a.get("aspect"),
+                "Aspect_Term":            a.get("aspect_term"),
+                "Opinion_Term":           a.get("opinion_term"),
+                "Aspect_Sentiment":       a.get("aspect_sentiment"),
+                "Confidence":             a.get("aspect_sentiment_confidence"),
+                "Category":               a.get("aspect_category"),
+                # Phase 2: business-level roll-up
+                "Business_Aspect":        a.get("business_aspect"),
+                "Business_Aspect_Display": a.get("business_aspect_display"),
+                # Phase 2: explainability
+                "Match_Type":             a.get("aspect_match_type", "exact"),
+                "Similarity":             a.get("aspect_similarity", 1.0),
+                # Emotion context
+                "Emotion":                emotion_label,
             }
         )
 
@@ -438,6 +690,27 @@ def _infer_absa_for_latest_user_turn(
         emotion_label=emotion_label,
     )
     _export_absa_rows(rows)
+
+    # ── Phase 2: accumulate aspects into session slot for dashboard insights ──
+    # We store lightweight dicts (no Original_Text to keep payload small).
+    existing: list = list(tracker.get_slot("absa_session_aspects") or [])
+    for a in aspects:
+        existing.append({
+            "aspect":          a.get("aspect"),
+            "business":        a.get("business_aspect"),
+            "business_display": a.get("business_aspect_display"),
+            "sentiment":       a.get("aspect_sentiment"),
+            "confidence":      a.get("aspect_sentiment_confidence"),
+            "opinion_term":    a.get("opinion_term"),
+            "match_type":      a.get("aspect_match_type", "exact"),
+            "emotion":         emotion_label,
+        })
+    # cap at 200 rows per session to stay within slot memory
+    if len(existing) > 200:
+        existing = existing[-200:]
+    # We cannot SlotSet here (no return path) — store on tracker via a module-level
+    # cache keyed by sender_id; ActionPushStateToDashboard reads it.
+    _absa_cache[tracker.sender_id] = existing
 ############################################
 class ActionUpdateConversationRisk(Action):
     def name(self) -> str: 
@@ -459,12 +732,18 @@ class ActionUpdateConversationRisk(Action):
         turn_escalation = crit.get("escalation") or _ESCALATION_MAP.get(level, "none")
 
         # CONVERSATION-LEVEL RISK (shared helper)
-        conv_state = _update_conversation_risk(tracker, level, score)
+        conv_state = _update_conversation_risk(
+            tracker, level, score,
+            reason_code=crit.get("criticality_reason_code", ""),
+            explanation=crit.get("criticality_explanation", ""),
+        )
 
         events: List[EventType] = [
             SlotSet("criticality_level", level),
             SlotSet("criticality_score", score),
             SlotSet("escalation", turn_escalation),
+            SlotSet("criticality_reason_code", crit.get("criticality_reason_code", "")),
+            SlotSet("criticality_explanation", crit.get("criticality_explanation", "")),
         ]
 
         for k, v in conv_state.items():
@@ -1696,6 +1975,9 @@ class ActionPushStateToDashboard(Action):
             "last_user_message": last_user_msg,
             "last_bot_message": last_bot_msg,
             "updated_at": datetime.utcnow().isoformat() + "Z",
+
+            # ── Phase 2: manager-level ABSA insights ──────────────────────────
+            "absa_insights": _build_absa_insights(_absa_cache.get(sender_id, [])),
         }
 
         try:

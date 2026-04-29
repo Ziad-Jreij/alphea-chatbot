@@ -79,10 +79,56 @@ def _ensure_keyword_patterns() -> None:
         )
 
 
-def _apply_keyword_overrides_text(text: str) -> Optional[Dict[str, Any]]:
-    """Apply keyword overrides to text. Returns a full result dict or None.
 
-    Priority: high keywords first, then medium.
+# ---------------------------------------------------------------------------
+# Week 2 Task 1: Realistic keyword guardrail hardening
+# ---------------------------------------------------------------------------
+# Problems fixed vs Week 1:
+#
+#  A) NEGATION FALSE POSITIVES
+#     "my card was NOT stolen" was matching "stolen card" → now suppressed.
+#     Negation window: if any negation word appears within _NEGATION_WINDOW_TOKENS
+#     tokens before the match span, the keyword is considered negated and skipped.
+#
+#  B) HEARSAY / HYPOTHETICAL FALSE POSITIVES
+#     "I heard this is a scam" / "wondering if this is fraud" → negation tokens
+#     like "heard", "wondering", "if", "whether" now cancel the match.
+#
+#  C) SOURCE TAG PRECISION
+#     Source now distinguishes "keyword_high" vs "keyword_medium" (not just
+#     "keyword") so the audit trail identifies which list fired.
+#
+#  D) MATCHED SPAN CAPTURED
+#     The actual text span that triggered the keyword is returned as
+#     "matched_span" for audit logging and dashboard display.
+# ---------------------------------------------------------------------------
+
+_NEGATION_PREFIXES = frozenset({
+    "not", "no", "never", "wasn't", "didn't", "don't", "haven't",
+    "isn't", "aren't", "doesn't", "can't", "couldn't", "wouldn't",
+    "won't", "without", "deny", "denying", "false", "fake",
+    "supposedly", "apparently", "heard", "wondering", "if",
+    "whether", "ask", "asking", "maybe", "perhaps", "possibly",
+})
+
+_NEGATION_WINDOW_TOKENS = 5
+
+
+def _is_negated(text_lower: str, match_start: int) -> bool:
+    """Return True if the match appears to be negated or hypothetical."""
+    prefix = text_lower[:match_start]
+    tokens = prefix.split()[-_NEGATION_WINDOW_TOKENS:]
+    return bool(set(tokens) & _NEGATION_PREFIXES)
+
+
+def _apply_keyword_overrides_text(text: str) -> Optional[Dict[str, Any]]:
+    """
+    Apply keyword guardrails to text. Returns a full result dict or None.
+
+    Week 2 improvements:
+    - Negation / hearsay guard cancels false-positive matches
+    - Source tag distinguishes keyword_high vs keyword_medium
+    - matched_span records the actual triggering text for the audit trail
     """
     text = (text or "").strip()
     if not text:
@@ -91,38 +137,45 @@ def _apply_keyword_overrides_text(text: str) -> Optional[Dict[str, Any]]:
     _ensure_keyword_patterns()
     lower = text.lower()
 
-    # High first (guardrail)
-    for level, patterns in (
-        ("high", _HIGH_KEYWORD_PATTERNS),
-        ("medium", _MEDIUM_KEYWORD_PATTERNS),
+    for level, patterns, source_tag in (
+        ("high",   _HIGH_KEYWORD_PATTERNS,   "keyword_high"),
+        ("medium", _MEDIUM_KEYWORD_PATTERNS, "keyword_medium"),
     ):
         for original, pat in patterns:
-            if pat.search(lower):
-                if level == "high":
-                    distribution = {"low": 0.01, "medium": 0.09, "high": 0.90}
-                else:
-                    distribution = {"low": 0.15, "medium": 0.70, "high": 0.15}
+            m = pat.search(lower)
+            if not m:
+                continue
 
-                score = float(distribution[level])
-                escalation = ESCALATION_MAP[level]
-
+            # Negation / hearsay guard
+            if _is_negated(lower, m.start()):
                 logger.debug(
-                    "[criticality] keyword override: text=%r level=%s score=%.2f esc=%s kw=%r",
-                    text,
-                    level,
-                    score,
-                    escalation,
-                    original,
+                    "[criticality] keyword NEGATED: kw=%r span=%r text=%r",
+                    original, m.group(), text[:100],
                 )
+                continue
 
-                return {
-                    "criticality_level": level,
-                    "criticality_score": score,
-                    "escalation": escalation,
-                    "distribution": distribution,
-                    "source": "keyword",
-                    "matched_keyword": original,
-                }
+            distribution = (
+                {"low": 0.01, "medium": 0.09, "high": 0.90}
+                if level == "high"
+                else {"low": 0.15, "medium": 0.70, "high": 0.15}
+            )
+            score = float(distribution[level])
+            escalation = ESCALATION_MAP[level]
+
+            logger.debug(
+                "[criticality] keyword override: kw=%r span=%r level=%s score=%.2f",
+                original, m.group(), level, score,
+            )
+
+            return {
+                "criticality_level": level,
+                "criticality_score": score,
+                "escalation": escalation,
+                "distribution": distribution,
+                "source": source_tag,
+                "matched_keyword": original,
+                "matched_span": m.group(),
+            }
 
     return None
 # ---------------------------------------------------------------------------
@@ -169,16 +222,18 @@ FINANCE_PATTERNS = [
 ]
 
 CORE_FUNCTION_PATTERNS = [
-    r"keeps? freezing",
-    r"keeps? crashing",
-    r"crash(es|ed)? often",
+    # Require repetition/persistence markers to avoid single-report false positives
+    r"keeps? (freezing|crashing|restarting|disconnecting)",
+    r"crash(es|ed)? (often|repeatedly|again|constantly|every time)",
     r"screen (keeps )?freez(ing|es)",
-    r"won.?t start",
-    r"won.?t turn on",
-    r"not working",
-    r"stopped working",
-    r"doesn.?t work properly",
-    r"battery dies? after",  # more general
+    r"won[''']?t (start|turn on|boot|open|load)",
+    # "not working" only with subject anchor (device/app/phone/system)
+    r"(device|phone|app|system|laptop|tablet|router|printer)\s+(is\s+)?(not working|stopped working|doesn[''']?t work)",
+    # Battery drain with specificity
+    r"battery (dies?|drains?) (after|in) \d",
+    # Complete failure phrases
+    r"completely (dead|broken|stopped|unusable)",
+    r"(won[''']?t|doesn[''']?t) (do anything|respond|work at all)",
 ]
 
 FRUSTRATION_PATTERNS = [
@@ -277,7 +332,46 @@ def _apply_structural_rules(
     return dist, source_suffix, matched_pattern
 
 # ---------------------------------------------------------------------------
-# Shared model defaults (aligned with your config.yml)
+# Week 1 Task 3: Three criticality levels with EXPLICIT, human-readable rules
+# ---------------------------------------------------------------------------
+#
+#  LEVEL   | ESCALATION       | TRIGGERS (at least ONE must be true)
+# ---------+------------------+------------------------------------------------------
+#  HIGH    | escalate_now     | • keyword match in high_keywords YAML
+#          |                  | • safety / medical / finance hard-override rule fires
+#          |                  | • zero-shot model confidence ≥ 0.65 for "high urgency"
+#          |                  | • frustration or core-function rule fires AND emotion
+#          |                  |   is frustrated/anxious (emotion confirms distress)
+# ---------+------------------+------------------------------------------------------
+#  MEDIUM  | potential        | • keyword match in medium_keywords YAML
+#          |                  | • zero-shot model confidence ≥ 0.45 for "medium urgency"
+#          |                  | • core-function rule fires but emotion is neutral/calm
+#          |                  | • contrast rule fires (e.g. "works fine but the app crashes")
+# ---------+------------------+------------------------------------------------------
+#  LOW     | none             | • none of the above match
+#          |                  | • model confidence < 0.45 for any urgency band
+#          |                  | • message is clearly informational / inquiry tone
+# ---------------------------------------------------------------------------
+#
+# Week 1 Task 4: Every decision produces a structured REASON CODE
+# ---------------------------------------------------------------------------
+# Format:  "<source>:<detail>"
+#
+# source values:
+#   keyword_high    – matched a high-priority YAML keyword
+#   keyword_medium  – matched a medium-priority YAML keyword
+#   rule_safety     – safety regex fired  (e.g. "on fire", "electric shock")
+#   rule_medical    – medical regex fired  (e.g. "wrong medicine", "allergic reaction")
+#   rule_finance    – finance regex fired  (e.g. "unauthorized charge", "account hacked")
+#   rule_core       – core-function regex fired  (e.g. "keeps crashing", "won't start")
+#   rule_frustration– frustration regex fired  (e.g. "no one is helping me")
+#   rule_contrast   – contrast structure detected  (e.g. "… but it crashed")
+#   model+emotion   – zero-shot model result, adjusted by emotion prior
+#   model           – zero-shot model result only (emotion not available / neutral)
+#
+# detail: keyword/pattern that triggered, or "conf=0.72" for model paths
+#
+# This means ANY escalation decision can be explained in < 30 seconds.
 # ---------------------------------------------------------------------------
 
 _CRIT_MODEL_NAME = "facebook/bart-large-mnli"
@@ -287,20 +381,102 @@ _CRIT_HYPOTHESIS = "This support request is {}."
 _crit_lock = Lock()
 _crit_pipe = None
 
-# Deterministic mapping to escalation
-ESCALATION_MAP = {"low":"none","medium":"potential","high":"escalate_now"}
+# Deterministic mapping to escalation (explicit — no magic numbers)
+ESCALATION_MAP = {"low": "none", "medium": "potential", "high": "escalate_now"}
+
+# Confidence thresholds that define the level boundaries (Task 3 rule: explicit)
+HIGH_CONF_THRESHOLD   = 0.65   # model output ≥ this → high
+MEDIUM_CONF_THRESHOLD = 0.45   # model output ≥ this → medium; below → low
 
 # Emotion -> prior (log-odds) weights toward urgency
+# Updated to use the 6 business-friendly emotion buckets (Task 1)
 EMOTION_WEIGHTS: Dict[str, Dict[str, float]] = {
-    "anger":      {"high": +1.0, "medium": +0.5, "low": -0.3},
-    "fear":       {"high": +1.2, "medium": +0.6, "low": -0.4},
-    "disgust":    {"high": +0.6, "medium": +0.4, "low": -0.2},
-    "sadness":    {"high": +0.4, "medium": +0.4, "low": -0.2},
-    "neutral":    {"high": +0.0, "medium": +0.0, "low": +0.0},
-    "joy":        {"high": -0.3, "medium": -0.2, "low": +0.2},
-    "surprise":   {"high": +0.2, "medium": +0.1, "low": 0.0},
-    "confusion":  {"high": +0.3, "medium": +0.2, "low": 0.0},
+    # business buckets
+    "frustrated":   {"high": +1.0, "medium": +0.5, "low": -0.3},
+    "anxious":      {"high": +1.2, "medium": +0.6, "low": -0.4},
+    "disappointed": {"high": +0.4, "medium": +0.4, "low": -0.2},
+    "confused":     {"high": +0.3, "medium": +0.2, "low": 0.0},
+    "neutral":      {"high": +0.0, "medium": +0.0, "low": +0.0},
+    "satisfied":    {"high": -0.3, "medium": -0.2, "low": +0.2},
+    # legacy raw labels kept for backward compatibility during transition
+    "anger":        {"high": +1.0, "medium": +0.5, "low": -0.3},
+    "fear":         {"high": +1.2, "medium": +0.6, "low": -0.4},
+    "disgust":      {"high": +0.6, "medium": +0.4, "low": -0.2},
+    "sadness":      {"high": +0.4, "medium": +0.4, "low": -0.2},
+    "joy":          {"high": -0.3, "medium": -0.2, "low": +0.2},
+    "surprise":     {"high": +0.2, "medium": +0.1, "low": 0.0},
+    "confusion":    {"high": +0.3, "medium": +0.2, "low": 0.0},
 }
+
+# ---------------------------------------------------------------------------
+# Reason-code builder (Task 4)
+# ---------------------------------------------------------------------------
+
+def build_reason_code(source: str, detail: Optional[str], level: str, score: float) -> str:
+    """
+    Produce a human-readable reason code for any criticality decision.
+
+    Examples:
+      "keyword_high:stolen card"
+      "rule_safety:caught fire"
+      "model+emotion:conf=0.71,emotion=frustrated"
+      "model:conf=0.52"
+    """
+    base = source.replace("+", "_and_")
+    if detail:
+        return f"{base}:{detail}"
+    return f"{base}:conf={score:.2f}"
+
+
+def explain_escalation(result: Dict[str, Any]) -> str:
+    """
+    Return a single English sentence that explains an escalation decision.
+    Designed to let any team member understand a decision in < 30 seconds.
+
+    Example outputs:
+      "Escalated to HIGH because a high-priority keyword matched: 'unauthorized charge'."
+      "Escalated to HIGH because a safety rule fired: pattern 'caught fire'."
+      "Escalated to MEDIUM because the model rated urgency at 0.58 (threshold 0.45), boosted by Frustrated emotion."
+      "No escalation (LOW): model urgency confidence 0.22, no keywords or rules matched."
+    """
+    level     = (result.get("criticality_level") or "low").upper()
+    source    = result.get("source") or "model"
+    score     = float(result.get("criticality_score") or 0.0)
+    keyword   = result.get("matched_keyword")
+    emotion   = result.get("emotion_used")
+    reason_code = result.get("reason_code", "")
+
+    if "keyword_high" in source or (source == "keyword" and result.get("criticality_level") == "high"):
+        return f"Escalated to {level} because a high-priority keyword matched: '{keyword}'."
+
+    if "keyword_medium" in source or (source == "keyword" and result.get("criticality_level") == "medium"):
+        return f"Raised to {level} because a medium-priority keyword matched: '{keyword}'."
+
+    if "safety_rule" in source:
+        return f"Escalated to {level} because a safety rule fired: pattern '{keyword}'."
+    if "medical_rule" in source:
+        return f"Escalated to {level} because a medical-risk rule fired: pattern '{keyword}'."
+    if "finance_rule" in source:
+        return f"Escalated to {level} because a financial-risk rule fired: pattern '{keyword}'."
+    if "core_rule" in source:
+        return f"Raised to {level} because a core-function failure rule fired: pattern '{keyword}'."
+    if "frustration_rule" in source:
+        return f"Escalated to {level} because a repeated-frustration rule fired: pattern '{keyword}'."
+    if "contrast_rule" in source:
+        return f"Raised to {level} because a contrast structure was detected (problem after 'but/however'): pattern '{keyword}'."
+
+    # Model path
+    emo_part = f", boosted by '{emotion}' emotion" if emotion and emotion not in ("neutral", "none") else ""
+    thresh = HIGH_CONF_THRESHOLD if level == "HIGH" else MEDIUM_CONF_THRESHOLD
+    if level in ("HIGH", "MEDIUM"):
+        return (
+            f"Escalated to {level} because the model rated urgency at {score:.2f} "
+            f"(threshold {thresh:.2f}){emo_part}."
+        )
+    return (
+        f"No escalation ({level}): model urgency confidence {score:.2f} "
+        f"(below {MEDIUM_CONF_THRESHOLD:.2f}), no keywords or rules matched."
+    )
 
 
 def _logit(p: float) -> float:
@@ -416,22 +592,51 @@ def infer_criticality_for_text(
     if heuristics_enabled:
         fused, rule_suffix, rule_match = _apply_structural_rules(text, fused)
 
-    # 4) Pick argmax
-    level = max(fused, key=fused.get)
-    score = float(fused[level])
+    # 4) Pick level using EXPLICIT confidence thresholds (Task 3)
+    #    Rules / keywords already set the distribution so argmax still works,
+    #    but for pure model paths we enforce the documented thresholds.
+    raw_argmax  = max(fused, key=fused.get)
+    high_conf   = float(fused.get("high", 0.0))
+    medium_conf = float(fused.get("medium", 0.0))
+
+    if high_conf >= HIGH_CONF_THRESHOLD:
+        level = "high"
+    elif medium_conf >= MEDIUM_CONF_THRESHOLD or raw_argmax == "medium":
+        level = "medium"
+    else:
+        level = "low"
+
+    score      = float(fused[level])
     escalation = ESCALATION_MAP[level]
 
+    # Build human-readable source tag (Task 4)
     source = "model" + rule_suffix
 
-    # logger.info(
-    #     "[criticality] text=%r -> level=%s score=%.2f esc=%s source=%s kw=%s",
-    #     text,
-    #     level,
-    #     score,
-    #     escalation,
-    #     source,
-    #     rule_match,
-    # )
+    # 5) Assemble reason_code + English explanation (Task 4)
+    reason_detail: Optional[str] = None
+    if rule_match:
+        reason_detail = rule_match
+    elif emotion:
+        reason_detail = f"conf={score:.2f},emotion={emotion}"
+    else:
+        reason_detail = f"conf={score:.2f}"
+
+    reason_code = build_reason_code(source, reason_detail, level, score)
+    explanation = explain_escalation({
+        "criticality_level": level,
+        "criticality_score": score,
+        "source": source,
+        "matched_keyword": rule_match,
+        "emotion_used": emotion,
+        "reason_code": reason_code,
+    })
+
+    logger.info(
+        "[criticality] %s | reason=%s | text=%r",
+        explanation,
+        reason_code,
+        text[:120],
+    )
 
     return {
         "criticality_level": level,
@@ -440,6 +645,9 @@ def infer_criticality_for_text(
         "distribution": fused,
         "source": source,
         "matched_keyword": rule_match,
+        "reason_code": reason_code,   # NEW – Task 4
+        "explanation": explanation,   # NEW – Task 4
+        "emotion_used": emotion,      # NEW – transparency
     }
 
 # ---------------------------------------------------------------------------

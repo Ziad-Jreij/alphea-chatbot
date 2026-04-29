@@ -152,5 +152,185 @@ def stats():
     })
 
 
+
+@app.route("/api/manager/overview", methods=["GET"])
+def manager_overview():
+    """
+    Cross-session aggregate for the Manager Overview screen.
+
+    Returns:
+      kpis                  - total, escalated, resolved, avg_criticality_score
+      lifecycle_counts      - {active, escalated, resolved, abandoned}
+      emotion_distribution  - {emotion: count}
+      top_negative_aspects  - [{display, mentions, negative, pct_neg}] sorted desc
+      escalation_timeline   - [{bucket: "HH:MM", escalations: N}] last 12 half-hours
+    """
+    from collections import defaultdict, Counter
+
+    total = len(SESSIONS)
+    escalated = 0
+    resolved = 0
+    abandoned = 0
+    crit_scores = []
+
+    emotion_counts = Counter()
+    aspect_buckets = defaultdict(lambda: {"mentions": 0, "negative": 0, "display": ""})
+    timeline_buckets = Counter()
+
+    for s in SESSIONS.values():
+        res_status = (s.get("resolution_status") or "").lower()
+        conv_esc = (s.get("conversation_escalation") or "none").lower()
+        handoff = bool(s.get("handoff_requested"))
+
+        if res_status == "resolved":
+            resolved += 1
+        elif handoff or conv_esc == "escalate_now":
+            escalated += 1
+        elif res_status == "abandoned":
+            abandoned += 1
+
+        cs = s.get("conversation_criticality_score") or s.get("criticality_score")
+        if cs is not None:
+            try:
+                crit_scores.append(float(cs))
+            except (ValueError, TypeError):
+                pass
+
+        emo = (s.get("emotion") or "").lower()
+        if emo:
+            emotion_counts[emo] += 1
+
+        insights = s.get("absa_insights") or {}
+        for key, d in insights.items():
+            if key == "__summary__":
+                continue
+            biz = d.get("business_aspect", key)
+            display = d.get("display", key)
+            aspect_buckets[biz]["mentions"] += d.get("mentions", 0)
+            aspect_buckets[biz]["negative"] += d.get("negative", 0)
+            aspect_buckets[biz]["display"] = display
+
+        updated_at = s.get("updated_at")
+        if updated_at and (handoff or conv_esc == "escalate_now"):
+            dt = _parse_iso_z(updated_at)
+            if dt:
+                bucket_min = (dt.minute // 30) * 30
+                bucket_key = dt.strftime(f"%H:{bucket_min:02d}")
+                timeline_buckets[bucket_key] += 1
+
+    top_neg = sorted(
+        [
+            {
+                "business_aspect": biz,
+                "display": d["display"] or biz,
+                "mentions": d["mentions"],
+                "negative": d["negative"],
+                "pct_neg": round(d["negative"] / d["mentions"] * 100) if d["mentions"] else 0,
+            }
+            for biz, d in aspect_buckets.items()
+            if d["negative"] > 0
+        ],
+        key=lambda x: x["negative"],
+        reverse=True,
+    )[:7]
+
+    timeline = [
+        {"bucket": k, "escalations": v}
+        for k, v in sorted(timeline_buckets.items())
+    ][-12:]
+
+    active = total - escalated - resolved - abandoned
+
+    return jsonify({
+        "kpis": {
+            "total_sessions":        total,
+            "escalated":             escalated,
+            "resolved":              resolved,
+            "avg_criticality_score": round(sum(crit_scores) / len(crit_scores), 2) if crit_scores else 0.0,
+            "resolution_rate_pct":   round(resolved / total * 100) if total else 0,
+        },
+        "lifecycle_counts": {
+            "active":    max(0, active),
+            "escalated": escalated,
+            "resolved":  resolved,
+            "abandoned": abandoned,
+        },
+        "emotion_distribution":  dict(emotion_counts.most_common()),
+        "top_negative_aspects":  top_neg,
+        "escalation_timeline":   timeline,
+    })
+
+
+@app.route("/api/manager/export.csv", methods=["GET"])
+def export_csv():
+    """Full CSV export of all sessions for manager download."""
+    import csv
+    import io
+    from flask import Response
+
+    fieldnames = [
+        "session_id", "lifecycle", "status",
+        "criticality", "criticality_score",
+        "escalation", "conversation_escalation",
+        "emotion", "sentiment",
+        "top_negative_aspects",
+        "updated_at",
+    ]
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+
+    for s_id, s in SESSIONS.items():
+        res_status = (s.get("resolution_status") or "").lower()
+        conv_esc = (s.get("conversation_escalation") or "none").lower()
+        handoff = bool(s.get("handoff_requested"))
+
+        if res_status == "resolved":
+            lifecycle = "Resolved"
+        elif handoff or conv_esc == "escalate_now":
+            lifecycle = "Escalated"
+        elif res_status == "abandoned":
+            lifecycle = "Abandoned"
+        else:
+            lifecycle = "Active"
+
+        insights = s.get("absa_insights") or {}
+        neg_aspects = sorted(
+            [
+                d.get("display", k)
+                for k, d in insights.items()
+                if k != "__summary__" and d.get("dominant_sentiment") == "negative"
+            ],
+            key=lambda x: next(
+                (v.get("negative", 0) for k, v in insights.items()
+                 if v.get("display") == x or k == x),
+                0,
+            ),
+            reverse=True,
+        )
+
+        writer.writerow({
+            "session_id":              s_id,
+            "lifecycle":               lifecycle,
+            "status":                  s.get("status") or _compute_status(s),
+            "criticality":             s.get("criticality", ""),
+            "criticality_score":       s.get("conversation_criticality_score") or s.get("criticality_score", ""),
+            "escalation":              s.get("escalation", ""),
+            "conversation_escalation": s.get("conversation_escalation", ""),
+            "emotion":                 s.get("emotion", ""),
+            "sentiment":               s.get("sentiment", ""),
+            "top_negative_aspects":    "; ".join(neg_aspects[:3]),
+            "updated_at":              s.get("updated_at", ""),
+        })
+
+    csv_bytes = output.getvalue().encode("utf-8")
+    return Response(
+        csv_bytes,
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=sessions_export.csv"},
+    )
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=True)

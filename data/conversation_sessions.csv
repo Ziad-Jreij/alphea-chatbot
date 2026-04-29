@@ -100,3 +100,12 @@ a3c803f97cab482cb6128dc1cd0e3575,2026-01-14T09:40:04.123333,reset_password,unkno
 b616cbefbef745d3a0548973dfeeaf68,2026-01-14T14:04:16.912496,ask_order_status,resolved,neutral,no,9,124,bad
 945be371cc4643789893bab951cd54b3,2026-01-14T14:08:24.417389,reset_password,resolved,neutral,no,9,69,neutral
 9e733f2fff4340efbf219a8d3651b908,2026-03-18T14:11:21.231212,ask_order_status,resolved,neutral,no,9,299,bad
+be1f256c3ae14064bf95730a59ea411b,2026-03-20T16:48:59.792042,ask_order_status,resolved,neutral,no,49,681,good
+63648f287bcd411d9f906af25b4da6c1,2026-03-20T17:00:49.199682,ask_order_status,fallback,neutral,no,6,18,good
+4e63929d202a4b46bb103e6cc963daa8,2026-03-20T17:01:21.651290,ask_order_status,resolved,neutral,no,11,36,good
+75b368a4f7cf470ba0b64a41a1e11de2,2026-03-20T17:02:26.367295,reset_password,unknown,negative,no,4,7,not_provided
+df99b430a9e24792a66faa0cd2fc261a,2026-03-20T17:04:06.824361,update_address,resolved,neutral,no,29,188,very_bad
+0a8e7d9d17404718b3b96110df47bfc5,2026-03-20T17:07:34.110396,shipping_times,unknown,neutral,no,12,133,good
+765ad1fe41c442b488c8c1f20a221976,2026-03-20T17:10:27.171450,report_damaged_product,unknown,negative,no,4,93,not_provided
+48b92a3da70649dbad5405832fc914cf,2026-03-20T17:13:45.878330,unknown,unknown,negative,no,4,8,not_provided
+4c065907f82b47b38c35588edf1f3643,2026-03-20T17:14:39.166445,report_damaged_product,unknown,negative,no,1,0,not_provided

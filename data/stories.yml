@@ -130,4 +130,3 @@ stories:
     - action: action_update_conversation_risk
     - action: action_push_state_to_dashboard
     - action: utter_chitchat
-

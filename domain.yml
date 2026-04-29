@@ -131,6 +131,14 @@ slots:
     mappings:
       - type: from_entity
         entity: escalation
+  # Phase 2 – ABSA session accumulator
+  # Stores all aspect-opinion rows extracted during this session.
+  # Used to build the manager-level Insights tab in the dashboard.
+  absa_session_aspects:
+    type: any
+    influence_conversation: false
+    mappings: [{ type: custom }]
+
   criticality_history:
     type: list
     influence_conversation: false
@@ -159,6 +167,27 @@ slots:
       - potential
       - escalate_now
     influence_conversation: true
+    mappings: [{ type: custom }]
+  # ── Week 2 Task 4: escalation audit trail ──────────────────────────────────
+  # Stores up to 50 structured audit events per session (list of dicts).
+  # Written by _update_conversation_risk; read by dashboard and ops tooling.
+  escalation_audit_log:
+    type: any
+    influence_conversation: false
+    mappings: [{ type: custom }]
+
+  # ── Week 2 Task 2: false-trigger flag ──────────────────────────────────────
+  # True when 4 consecutive low/medium turns follow an unconfirmed HIGH.
+  false_trigger_candidate:
+    type: bool
+    influence_conversation: false
+    mappings: [{ type: custom }]
+
+  # ── Week 1 Task 4: human-readable escalation explanation ───────────────────
+  # English sentence summarising why the current criticality level was assigned.
+  criticality_explanation:
+    type: text
+    influence_conversation: false
     mappings: [{ type: custom }]
   order_id:
     type: text

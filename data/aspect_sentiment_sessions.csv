@@ -1,68 +1,76 @@
-Session_ID,Original_Text,Aspect,Aspect_Term,Opinion_Term,Aspect_Sentiment,Confidence,Category,Emotion
-f33c5b6280814b3fa104ff19d44df36b,"""The app is buggy and crashes often. The support team was unhelpful.""",reliability,crashes,crashes,negative,0.95,Reliability,annoyance
-f33c5b6280814b3fa104ff19d44df36b,"""The app is buggy and crashes often. The support team was unhelpful.""",reliability,buggy,buggy,negative,0.95,Reliability,annoyance
-f33c5b6280814b3fa104ff19d44df36b,"""The app is buggy and crashes often. The support team was unhelpful.""",customer support,support team,unhelpful,negative,0.9,Service,annoyance
-74d74df6e77c4dcb8be108854c2e915a,/report_damaged_product,overall experience,,damaged,negative,0.7,Overall_Experience,disappointment
-74d74df6e77c4dcb8be108854c2e915a,"I love the new design, though the price is a little too high.",design,design,love,positive,0.95,Aesthetics,admiration
-74d74df6e77c4dcb8be108854c2e915a,"I love the new design, though the price is a little too high.",price,price,too high,negative,0.9,Cost,admiration
-fb5ec20f18b14864a65611e924782c2d,/cancel_order,overall experience,,,negative,0.7,Overall_Experience,disapproval
-97f4e9cbec424ff5a7a0ad79335f677f,/report_damaged_product,overall experience,,damaged,negative,0.7,Overall_Experience,disappointment
-97f4e9cbec424ff5a7a0ad79335f677f,The app is buggy and crashes often. The support team was unhelpful.,reliability,crashes,crashes,negative,0.95,Reliability,annoyance
-97f4e9cbec424ff5a7a0ad79335f677f,The app is buggy and crashes often. The support team was unhelpful.,reliability,buggy,buggy,negative,0.95,Reliability,annoyance
-97f4e9cbec424ff5a7a0ad79335f677f,The app is buggy and crashes often. The support team was unhelpful.,customer support,support team,unhelpful,negative,0.9,Service,annoyance
-c0fd1edf4e21406c9e287271dc8dc6b0,"""The battery life is fantastic, but the camera is just average.""",camera,camera,average,neutral,0.95,Features,curiosity
-c0fd1edf4e21406c9e287271dc8dc6b0,"""The battery life is fantastic, but the camera is just average.""",battery life,battery life,fantastic,positive,0.9,Performance,curiosity
-45a632ef0c5c4d21bc2f040529b09cce,The app is buggy and crashes often. The support team was unhelpful.,app experience,The app,buggy,negative,0.95,Digital_Experience,annoyance
-45a632ef0c5c4d21bc2f040529b09cce,The app is buggy and crashes often. The support team was unhelpful.,customer support,support team,unhelpful,negative,0.9,Service,annoyance
-9895f440e4eb43c2b6049dc64944d6bc,"I love the new design, though the price is a little too high.",price,price,a little too high,negative,0.95,Cost,admiration
-9895f440e4eb43c2b6049dc64944d6bc,"I love the new design, though the price is a little too high.",design,design,love,positive,0.95,Aesthetics,admiration
-c84dffca7fbe4c62891ec2f09396ebdc,"I love the new delivery tracker, but the driver was really rude when dropping off the order.",delivery & shipping,delivery,love,positive,0.95,Logistics,annoyance
-8f161a8628ef4517a2b04ae091329097,ssssssssssssdewwwwwwwww,overall experience,,,negative,0.7,Overall_Experience,disgust
-2b31bd55e14e46929c8808f29d2a7636,alex@example.com,overall experience,,,positive,0.7,Overall_Experience,caring
-f3b712601eff4f2eac26dfcb0d8cbd36,I change my mind. bad experience with the product,overall experience,,bad,negative,0.7,Overall_Experience,disappointment
-527996c73c6d4642b0a0bdd422401b1b,"""The battery life is fantastic, but the camera is just average.""",camera,camera,just average,neutral,0.95,Features,curiosity
-527996c73c6d4642b0a0bdd422401b1b,"""The battery life is fantastic, but the camera is just average.""",battery life,battery life,fantastic,positive,0.95,Performance,curiosity
-cb53f7ae258e49679876a911f67e0907,"I love the new design, though the price is a little too high.",price,price,a little too high,negative,0.95,Cost,
-cb53f7ae258e49679876a911f67e0907,"I love the new design, though the price is a little too high.",design,design,love,positive,0.95,Aesthetics,
-3be70e55cfdd471fb10895572b4bbad7,"""The app is buggy and crashes often. The support team was unhelpful.""",app experience,The app,buggy,negative,0.95,Digital_Experience,annoyance
-3be70e55cfdd471fb10895572b4bbad7,"""The app is buggy and crashes often. The support team was unhelpful.""",customer support,support team,unhelpful,negative,0.95,Service,annoyance
-a2efd65bcf8c4e2ca401069d4c0f3579,dented corner,overall experience,,,negative,0.7,Overall_Experience,embarrassment
-db3488d3bd5b41abbe1a822cd95d1065,dented corner,overall experience,,,negative,0.7,Overall_Experience,embarrassment
-300d8986481c46f2865fe98cc2d94da8,my product is damaged,overall experience,,damaged,negative,0.7,Overall_Experience,disappointment
-300d8986481c46f2865fe98cc2d94da8,dented corner,overall experience,,,negative,0.7,Overall_Experience,embarrassment
-328e223b150743d3abfd018ef2f41fbd,my credit card is stolen,overall experience,,,negative,0.7,Overall_Experience,disapproval
-f459f2e36bae430ca094c68a82c20bd8,alex@example.com,overall experience,,,positive,0.7,Overall_Experience,caring
-8139fbc8303347cebd97d5258ab88348,"I changed my mind, I don't want this product anymore",overall experience,,,negative,0.7,Overall_Experience,disapproval
-8139fbc8303347cebd97d5258ab88348,my cresit card is stolen,overall experience,,,negative,0.7,Overall_Experience,disapproval
-47ee0dcecc034a649107920587ba541c,my data was leaked,safety & defects,leak,,neutral,0.5,Reliability,
-3589cbdd81de41c1aa7d48be884c51d9,"the battery life is great, whereas the screen is terrible",battery life,battery life,great,positive,0.95,Performance,annoyance
-8ee95edab3fe44b5947c3a64d11929f9,my account is compromised,overall experience,,,negative,0.7,Overall_Experience,disappointment
-b68faa7e44f341798907b7751d27e8ff,my data was leaked,safety & defects,leak,,negative,0.7,Reliability,embarrassment
-f4af5c6730d24974b47e3bba4809353e,john@example.com,overall experience,,,positive,0.7,Overall_Experience,caring
-492898cb0f0c4d0abeae97bee9dfc468,"The battery life is fantastic, but the camera is just average.",camera,camera,just average,neutral,0.95,Features,curiosity
-492898cb0f0c4d0abeae97bee9dfc468,"The battery life is fantastic, but the camera is just average.",battery life,battery life,fantastic,positive,0.95,Performance,curiosity
-1ea62c3ec3404771be4e2a293ff62022,"I love the new design, though the price is a little too high.",price,price,a little too high,negative,0.95,Cost,admiration
-1ea62c3ec3404771be4e2a293ff62022,"I love the new design, though the price is a little too high.",design,design,love,positive,0.95,Aesthetics,admiration
-79c0b9b311364890826aecf5219bfb19,The app is buggy and crashes often. The support team was unhelpful.,app experience,The app,buggy,negative,0.95,Digital_Experience,annoyance
-79c0b9b311364890826aecf5219bfb19,The app is buggy and crashes often. The support team was unhelpful.,customer support,support team,unhelpful,negative,0.95,Service,annoyance
-79c0b9b311364890826aecf5219bfb19,"This is unacceptable, my order is completely messed up",overall experience,,unacceptable,negative,0.7,Overall_Experience,annoyance
-81926441bc8a420bb092da3e046883a9,alex@example.com,overall experience,,,positive,0.7,Overall_Experience,caring
-81926441bc8a420bb092da3e046883a9,You charged me twice and no one is helping,billing,charge,,negative,0.7,Cost,disappointment
-3e2637e64ff34f27b192ecda3f2f5318,"This is unacceptable, my order is completely messed up",overall experience,,unacceptable,negative,0.7,Overall_Experience,disappointment
-3e2637e64ff34f27b192ecda3f2f5318,"dented corner”, or “missing parts”). This helps the support team",customer support,support team,,positive,0.7,Service,relief
-4a69aa2f62ad4b8fbc2e66ed351ddcf2,You charged me twice and no one is helping,billing,charge,,neutral,0.5,Cost,
-4a69aa2f62ad4b8fbc2e66ed351ddcf2,You charged me twice and no one is helping,billing,charge,,negative,0.7,Cost,disappointment
-4a69aa2f62ad4b8fbc2e66ed351ddcf2,You charged me twice and no one is helping,billing,charge,,negative,0.7,Cost,disappointment
-4a69aa2f62ad4b8fbc2e66ed351ddcf2,alex@example.com,overall experience,,,positive,0.7,Overall_Experience,caring
-4a69aa2f62ad4b8fbc2e66ed351ddcf2,no,overall experience,,,negative,0.7,Overall_Experience,disapproval
-4a69aa2f62ad4b8fbc2e66ed351ddcf2,no,overall experience,,,negative,0.7,Overall_Experience,disapproval
-4a69aa2f62ad4b8fbc2e66ed351ddcf2,This is the worst service I have ever experienced,overall experience,,,negative,0.7,Overall_Experience,disappointment
-5a8ab0ffed2445ad8cbdf168a5539cd4,Your service is terrible and unacceptable,overall experience,,unacceptable,negative,0.7,Overall_Experience,disapproval
-2523c54efd0b4011b1bda9a14a7ed1e8,"this is ridiculous, nothing is working the way it should",overall experience,,ridiculous,negative,0.7,Overall_Experience,sadness
-d70b705dc21b4bf187bafb8dcebe3c8c,my order is so late this is unacceptable,overall experience,,unacceptable,negative,0.7,Overall_Experience,grief
-d70b705dc21b4bf187bafb8dcebe3c8c,your product is so amazing it caught fire last night,safety & defects,caught fire,caught fire,negative,0.95,Reliability,grief
-d70b705dc21b4bf187bafb8dcebe3c8c,i think my credit card was stolen,overall experience,,,negative,0.7,Overall_Experience,grief
-d70b705dc21b4bf187bafb8dcebe3c8c,your product is very good,overall experience,,,negative,0.7,Overall_Experience,grief
-4a1f6fccb8c24dfab3fec41675863417,when will my order arrive?,overall experience,,,negative,0.7,Overall_Experience,disapproval
-4c45ef46a6b24674ac7967143de4078c,i am happy with your product,app experience,app,happy,positive,0.95,Digital_Experience,
-ff00756c2b3c4087bce0b345cd26599d,you sent me a broken item!!!,overall experience,,ok,negative,0.7,Overall_Experience,disappointment
+Session_ID,Original_Text,Aspect,Aspect_Term,Opinion_Term,Aspect_Sentiment,Confidence,Category,Business_Aspect,Business_Aspect_Display,Match_Type,Similarity,Emotion
+f33c5b6280814b3fa104ff19d44df36b,"""The app is buggy and crashes often. The support team was unhelpful.""",reliability,crashes,crashes,negative,0.95,Reliability,,,,,annoyance
+f33c5b6280814b3fa104ff19d44df36b,"""The app is buggy and crashes often. The support team was unhelpful.""",reliability,buggy,buggy,negative,0.95,Reliability,,,,,annoyance
+f33c5b6280814b3fa104ff19d44df36b,"""The app is buggy and crashes often. The support team was unhelpful.""",customer support,support team,unhelpful,negative,0.9,Service,,,,,annoyance
+74d74df6e77c4dcb8be108854c2e915a,/report_damaged_product,overall experience,,damaged,negative,0.7,Overall_Experience,,,,,disappointment
+74d74df6e77c4dcb8be108854c2e915a,"I love the new design, though the price is a little too high.",design,design,love,positive,0.95,Aesthetics,,,,,admiration
+74d74df6e77c4dcb8be108854c2e915a,"I love the new design, though the price is a little too high.",price,price,too high,negative,0.9,Cost,,,,,admiration
+fb5ec20f18b14864a65611e924782c2d,/cancel_order,overall experience,,,negative,0.7,Overall_Experience,,,,,disapproval
+97f4e9cbec424ff5a7a0ad79335f677f,/report_damaged_product,overall experience,,damaged,negative,0.7,Overall_Experience,,,,,disappointment
+97f4e9cbec424ff5a7a0ad79335f677f,The app is buggy and crashes often. The support team was unhelpful.,reliability,crashes,crashes,negative,0.95,Reliability,,,,,annoyance
+97f4e9cbec424ff5a7a0ad79335f677f,The app is buggy and crashes often. The support team was unhelpful.,reliability,buggy,buggy,negative,0.95,Reliability,,,,,annoyance
+97f4e9cbec424ff5a7a0ad79335f677f,The app is buggy and crashes often. The support team was unhelpful.,customer support,support team,unhelpful,negative,0.9,Service,,,,,annoyance
+c0fd1edf4e21406c9e287271dc8dc6b0,"""The battery life is fantastic, but the camera is just average.""",camera,camera,average,neutral,0.95,Features,,,,,curiosity
+c0fd1edf4e21406c9e287271dc8dc6b0,"""The battery life is fantastic, but the camera is just average.""",battery life,battery life,fantastic,positive,0.9,Performance,,,,,curiosity
+45a632ef0c5c4d21bc2f040529b09cce,The app is buggy and crashes often. The support team was unhelpful.,app experience,The app,buggy,negative,0.95,Digital_Experience,,,,,annoyance
+45a632ef0c5c4d21bc2f040529b09cce,The app is buggy and crashes often. The support team was unhelpful.,customer support,support team,unhelpful,negative,0.9,Service,,,,,annoyance
+9895f440e4eb43c2b6049dc64944d6bc,"I love the new design, though the price is a little too high.",price,price,a little too high,negative,0.95,Cost,,,,,admiration
+9895f440e4eb43c2b6049dc64944d6bc,"I love the new design, though the price is a little too high.",design,design,love,positive,0.95,Aesthetics,,,,,admiration
+c84dffca7fbe4c62891ec2f09396ebdc,"I love the new delivery tracker, but the driver was really rude when dropping off the order.",delivery & shipping,delivery,love,positive,0.95,Logistics,,,,,annoyance
+8f161a8628ef4517a2b04ae091329097,ssssssssssssdewwwwwwwww,overall experience,,,negative,0.7,Overall_Experience,,,,,disgust
+2b31bd55e14e46929c8808f29d2a7636,alex@example.com,overall experience,,,positive,0.7,Overall_Experience,,,,,caring
+f3b712601eff4f2eac26dfcb0d8cbd36,I change my mind. bad experience with the product,overall experience,,bad,negative,0.7,Overall_Experience,,,,,disappointment
+527996c73c6d4642b0a0bdd422401b1b,"""The battery life is fantastic, but the camera is just average.""",camera,camera,just average,neutral,0.95,Features,,,,,curiosity
+527996c73c6d4642b0a0bdd422401b1b,"""The battery life is fantastic, but the camera is just average.""",battery life,battery life,fantastic,positive,0.95,Performance,,,,,curiosity
+cb53f7ae258e49679876a911f67e0907,"I love the new design, though the price is a little too high.",price,price,a little too high,negative,0.95,Cost,,,,,
+cb53f7ae258e49679876a911f67e0907,"I love the new design, though the price is a little too high.",design,design,love,positive,0.95,Aesthetics,,,,,
+3be70e55cfdd471fb10895572b4bbad7,"""The app is buggy and crashes often. The support team was unhelpful.""",app experience,The app,buggy,negative,0.95,Digital_Experience,,,,,annoyance
+3be70e55cfdd471fb10895572b4bbad7,"""The app is buggy and crashes often. The support team was unhelpful.""",customer support,support team,unhelpful,negative,0.95,Service,,,,,annoyance
+a2efd65bcf8c4e2ca401069d4c0f3579,dented corner,overall experience,,,negative,0.7,Overall_Experience,,,,,embarrassment
+db3488d3bd5b41abbe1a822cd95d1065,dented corner,overall experience,,,negative,0.7,Overall_Experience,,,,,embarrassment
+300d8986481c46f2865fe98cc2d94da8,my product is damaged,overall experience,,damaged,negative,0.7,Overall_Experience,,,,,disappointment
+300d8986481c46f2865fe98cc2d94da8,dented corner,overall experience,,,negative,0.7,Overall_Experience,,,,,embarrassment
+328e223b150743d3abfd018ef2f41fbd,my credit card is stolen,overall experience,,,negative,0.7,Overall_Experience,,,,,disapproval
+f459f2e36bae430ca094c68a82c20bd8,alex@example.com,overall experience,,,positive,0.7,Overall_Experience,,,,,caring
+8139fbc8303347cebd97d5258ab88348,"I changed my mind, I don't want this product anymore",overall experience,,,negative,0.7,Overall_Experience,,,,,disapproval
+8139fbc8303347cebd97d5258ab88348,my cresit card is stolen,overall experience,,,negative,0.7,Overall_Experience,,,,,disapproval
+47ee0dcecc034a649107920587ba541c,my data was leaked,safety & defects,leak,,neutral,0.5,Reliability,,,,,
+3589cbdd81de41c1aa7d48be884c51d9,"the battery life is great, whereas the screen is terrible",battery life,battery life,great,positive,0.95,Performance,,,,,annoyance
+8ee95edab3fe44b5947c3a64d11929f9,my account is compromised,overall experience,,,negative,0.7,Overall_Experience,,,,,disappointment
+b68faa7e44f341798907b7751d27e8ff,my data was leaked,safety & defects,leak,,negative,0.7,Reliability,,,,,embarrassment
+f4af5c6730d24974b47e3bba4809353e,john@example.com,overall experience,,,positive,0.7,Overall_Experience,,,,,caring
+492898cb0f0c4d0abeae97bee9dfc468,"The battery life is fantastic, but the camera is just average.",camera,camera,just average,neutral,0.95,Features,,,,,curiosity
+492898cb0f0c4d0abeae97bee9dfc468,"The battery life is fantastic, but the camera is just average.",battery life,battery life,fantastic,positive,0.95,Performance,,,,,curiosity
+1ea62c3ec3404771be4e2a293ff62022,"I love the new design, though the price is a little too high.",price,price,a little too high,negative,0.95,Cost,,,,,admiration
+1ea62c3ec3404771be4e2a293ff62022,"I love the new design, though the price is a little too high.",design,design,love,positive,0.95,Aesthetics,,,,,admiration
+79c0b9b311364890826aecf5219bfb19,The app is buggy and crashes often. The support team was unhelpful.,app experience,The app,buggy,negative,0.95,Digital_Experience,,,,,annoyance
+79c0b9b311364890826aecf5219bfb19,The app is buggy and crashes often. The support team was unhelpful.,customer support,support team,unhelpful,negative,0.95,Service,,,,,annoyance
+79c0b9b311364890826aecf5219bfb19,"This is unacceptable, my order is completely messed up",overall experience,,unacceptable,negative,0.7,Overall_Experience,,,,,annoyance
+81926441bc8a420bb092da3e046883a9,alex@example.com,overall experience,,,positive,0.7,Overall_Experience,,,,,caring
+81926441bc8a420bb092da3e046883a9,You charged me twice and no one is helping,billing,charge,,negative,0.7,Cost,,,,,disappointment
+3e2637e64ff34f27b192ecda3f2f5318,"This is unacceptable, my order is completely messed up",overall experience,,unacceptable,negative,0.7,Overall_Experience,,,,,disappointment
+3e2637e64ff34f27b192ecda3f2f5318,"dented corner”, or “missing parts”). This helps the support team",customer support,support team,,positive,0.7,Service,,,,,relief
+4a69aa2f62ad4b8fbc2e66ed351ddcf2,You charged me twice and no one is helping,billing,charge,,neutral,0.5,Cost,,,,,
+4a69aa2f62ad4b8fbc2e66ed351ddcf2,You charged me twice and no one is helping,billing,charge,,negative,0.7,Cost,,,,,disappointment
+4a69aa2f62ad4b8fbc2e66ed351ddcf2,You charged me twice and no one is helping,billing,charge,,negative,0.7,Cost,,,,,disappointment
+4a69aa2f62ad4b8fbc2e66ed351ddcf2,alex@example.com,overall experience,,,positive,0.7,Overall_Experience,,,,,caring
+4a69aa2f62ad4b8fbc2e66ed351ddcf2,no,overall experience,,,negative,0.7,Overall_Experience,,,,,disapproval
+4a69aa2f62ad4b8fbc2e66ed351ddcf2,no,overall experience,,,negative,0.7,Overall_Experience,,,,,disapproval
+4a69aa2f62ad4b8fbc2e66ed351ddcf2,This is the worst service I have ever experienced,overall experience,,,negative,0.7,Overall_Experience,,,,,disappointment
+5a8ab0ffed2445ad8cbdf168a5539cd4,Your service is terrible and unacceptable,overall experience,,unacceptable,negative,0.7,Overall_Experience,,,,,disapproval
+2523c54efd0b4011b1bda9a14a7ed1e8,"this is ridiculous, nothing is working the way it should",overall experience,,ridiculous,negative,0.7,Overall_Experience,,,,,sadness
+d70b705dc21b4bf187bafb8dcebe3c8c,my order is so late this is unacceptable,overall experience,,unacceptable,negative,0.7,Overall_Experience,,,,,grief
+d70b705dc21b4bf187bafb8dcebe3c8c,your product is so amazing it caught fire last night,safety & defects,caught fire,caught fire,negative,0.95,Reliability,,,,,grief
+d70b705dc21b4bf187bafb8dcebe3c8c,i think my credit card was stolen,overall experience,,,negative,0.7,Overall_Experience,,,,,grief
+d70b705dc21b4bf187bafb8dcebe3c8c,your product is very good,overall experience,,,negative,0.7,Overall_Experience,,,,,grief
+4a1f6fccb8c24dfab3fec41675863417,when will my order arrive?,overall experience,,,negative,0.7,Overall_Experience,,,,,disapproval
+4c45ef46a6b24674ac7967143de4078c,i am happy with your product,app experience,app,happy,positive,0.95,Digital_Experience,,,,,
+ff00756c2b3c4087bce0b345cd26599d,you sent me a broken item!!!,overall experience,,ok,negative,0.7,Overall_Experience,,,,,disappointment
+be1f256c3ae14064bf95730a59ea411b,how long does shipping take?,delivery & shipping,shipping,,negative,1.0,Logistics,delivery_experience,Delivery Experience,exact,1.0,grief
+be1f256c3ae14064bf95730a59ea411b,what is your refund policy?,return policy,refund policy,,neutral,0.95,Policy,return_and_refund,Returns & Refunds,exact,1.0,curiosity
+df99b430a9e24792a66faa0cd2fc261a,change my shipping address,delivery & shipping,shipping,,negative,1.0,Logistics,delivery_experience,Delivery Experience,exact,1.0,annoyance
+df99b430a9e24792a66faa0cd2fc261a,"99 New Street, Nicosia, 1000, Cyprus",overall experience,,,neutral,0.55,Overall_Experience,overall_experience,Overall Experience,global_fallback,0.0,realization
+0a8e7d9d17404718b3b96110df47bfc5,how long does shipping take?,delivery & shipping,shipping,,positive,1.0,Logistics,delivery_experience,Delivery Experience,exact,1.0,gratitude
+765ad1fe41c442b488c8c1f20a221976,how long does shipping take?,delivery & shipping,shipping,,neutral,0.95,Logistics,delivery_experience,Delivery Experience,exact,1.0,
+4c065907f82b47b38c35588edf1f3643,the screen cracked after one day and the battery drains way too fast,battery life,battery drains,fast,positive,0.95,Performance,product_quality,Product Quality,exact,1.0,
+4c065907f82b47b38c35588edf1f3643,the screen cracked after one day and the battery drains way too fast,performance,fast,,neutral,0.95,Performance,product_quality,Product Quality,exact,1.0,
