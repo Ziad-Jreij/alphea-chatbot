@@ -1,6 +1,6 @@
-# Alphea — AI Customer Service Chatbot
+# Vexa — AI Customer Service Chatbot
 
-Alphea is a production-ready e-commerce customer service chatbot built on Rasa 3.x. It combines three custom NLU components — real-time emotion detection, zero-shot criticality scoring, and aspect-based sentiment analysis — with a Flask admin dashboard that lets support teams monitor live conversations, track escalations, and export session data. The full stack runs in Docker with PostgreSQL persistence and a Prometheus/Grafana monitoring layer.
+Vexa is a production-ready e-commerce customer service chatbot built on Rasa 3.x. It combines three custom NLU components — real-time emotion detection, zero-shot criticality scoring, and aspect-based sentiment analysis — with a Flask admin dashboard that lets support teams monitor live conversations, track escalations, and export session data. The full stack runs in Docker with PostgreSQL persistence and a Prometheus/Grafana monitoring layer.
 
 ---
 
@@ -51,8 +51,8 @@ Alphea is a production-ready e-commerce customer service chatbot built on Rasa 3
 ## Quick Start
 
 ```bash
-git clone https://github.com/Ziad-Jreij/alphea-chatbot.git
-cd alphea-chatbot
+git clone https://github.com/Ziad-Jreij/vexa-chatbot.git
+cd vexa-chatbot
 
 # Copy the example env file and edit secrets before going to production
 cp .env.example .env

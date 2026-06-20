@@ -31,13 +31,13 @@ log = get_logger(__name__)
 
 # ── Prometheus metrics (no-ops when prometheus_client not installed) ───────────
 if _PROMETHEUS:
-    _REQ_COUNT   = PCounter("alphea_requests_total",
+    _REQ_COUNT   = PCounter("vexa_requests_total",
                             "HTTP requests", ["endpoint", "method", "status"])
-    _REQ_LATENCY = Histogram("alphea_request_duration_seconds",
+    _REQ_LATENCY = Histogram("vexa_request_duration_seconds",
                              "HTTP request duration", ["endpoint"])
-    _SESS_TOTAL  = Gauge("alphea_sessions_total",      "Total chat sessions")
-    _SESS_RED    = Gauge("alphea_sessions_red_alerts", "Red-alert sessions")
-    _SESS_ESC    = Gauge("alphea_sessions_escalated",  "Escalated sessions")
+    _SESS_TOTAL  = Gauge("vexa_sessions_total",      "Total chat sessions")
+    _SESS_RED    = Gauge("vexa_sessions_red_alerts", "Red-alert sessions")
+    _SESS_ESC    = Gauge("vexa_sessions_escalated",  "Escalated sessions")
 
 # ── Config ────────────────────────────────────────────────────────────────────
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://chatbot:chatbot@localhost:5432/chatbot")
