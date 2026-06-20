@@ -1,0 +1,12 @@
+.venv/
+.rasa/
+.hf_cache/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.git/
+.gitignore
+*.tar.gz
+datasets/conversation_sessions.csv
+datasets/aspect_sentiment_sessions.csv

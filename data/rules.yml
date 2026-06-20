@@ -103,7 +103,7 @@ rules:
   steps:
     - action: action_soft_affirmation
     - intent: affirm
-    - action: action_revert_fallback_events
+    - action: utter_welcome_menu
 
 - rule: Fallback to email lookup if user doesn’t have order ID
   condition:
@@ -445,6 +445,14 @@ rules:
     - action: action_push_state_to_dashboard
     - action: utter_oos_personal_condolences
     - action: utter_welcome_menu
+- rule: Handle crisis or self-harm (immediate escalation)
+  steps:
+    - intent: out_of_scope_crisis
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
+    - action: utter_oos_crisis
+    - action: utter_escalation_banner
 - rule: Handle conversation feedback and export
   steps:
     - intent: give_conversation_feedback

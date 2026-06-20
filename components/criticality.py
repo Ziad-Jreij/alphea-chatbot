@@ -7,15 +7,29 @@ import math
 import re
 from threading import Lock
 
+import os
+
 import torch
 import yaml
 from transformers import pipeline
-from rasa.engine.graph import GraphComponent
-from rasa.engine.recipes.default_recipe import DefaultV1Recipe
-from rasa.engine.storage.resource import Resource
-from rasa.engine.storage.storage import ModelStorage
-from rasa.shared.nlu.constants import TEXT
-from rasa.shared.nlu.training_data.message import Message
+try:
+    from rasa.engine.graph import GraphComponent
+    from rasa.engine.recipes.default_recipe import DefaultV1Recipe
+    from rasa.engine.storage.resource import Resource
+    from rasa.engine.storage.storage import ModelStorage
+    from rasa.shared.nlu.constants import TEXT
+    from rasa.shared.nlu.training_data.message import Message
+except ImportError:
+    class GraphComponent:  # type: ignore[no-redef]
+        pass
+    class DefaultV1Recipe:  # type: ignore[no-redef]
+        @classmethod
+        def register(cls, **kwargs):
+            return lambda f: f
+    Resource = None  # type: ignore[assignment]
+    ModelStorage = None  # type: ignore[assignment]
+    Message = None  # type: ignore[assignment]
+    TEXT = "text"
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +121,7 @@ _NEGATION_PREFIXES = frozenset({
     "not", "no", "never", "wasn't", "didn't", "don't", "haven't",
     "isn't", "aren't", "doesn't", "can't", "couldn't", "wouldn't",
     "won't", "without", "deny", "denying", "false", "fake",
-    "supposedly", "apparently", "heard", "wondering", "if",
+    "supposedly", "apparently", "heard", "wondering",
     "whether", "ask", "asking", "maybe", "perhaps", "possibly",
 })
 
@@ -167,6 +181,16 @@ def _apply_keyword_overrides_text(text: str) -> Optional[Dict[str, Any]]:
                 original, m.group(), level, score,
             )
 
+            reason_code = build_reason_code(source_tag, original, level, score)
+            explanation = explain_escalation({
+                "criticality_level": level,
+                "criticality_score": score,
+                "source": source_tag,
+                "matched_keyword": original,
+                "emotion_used": None,
+                "reason_code": reason_code,
+            })
+
             return {
                 "criticality_level": level,
                 "criticality_score": score,
@@ -175,6 +199,9 @@ def _apply_keyword_overrides_text(text: str) -> Optional[Dict[str, Any]]:
                 "source": source_tag,
                 "matched_keyword": original,
                 "matched_span": m.group(),
+                "reason_code": reason_code,
+                "explanation": explanation,
+                "emotion_used": None,
             }
 
     return None
@@ -374,7 +401,7 @@ def _apply_structural_rules(
 # This means ANY escalation decision can be explained in < 30 seconds.
 # ---------------------------------------------------------------------------
 
-_CRIT_MODEL_NAME = "facebook/bart-large-mnli"
+_CRIT_MODEL_NAME = "MoritzLaurer/deberta-v3-base-zeroshot-v2.0"
 _CRIT_LABELS = ["low urgency", "medium urgency", "high urgency"]
 _CRIT_HYPOTHESIS = "This support request is {}."
 
@@ -488,17 +515,40 @@ def _sigmoid(x: float) -> float:
     return 1 / (1 + math.exp(-x))
 
 
+def _resolve_device() -> int:
+    """Return the torch device index based on the GPU_ENABLED env var.
+
+    GPU_ENABLED=auto  (default) — use GPU when CUDA is available, otherwise CPU.
+    GPU_ENABLED=true            — require GPU; raise at startup if none found.
+    GPU_ENABLED=false           — always use CPU regardless of hardware.
+    """
+    setting = os.environ.get("GPU_ENABLED", "auto").lower().strip()
+    if setting == "false":
+        return -1
+    if setting == "true":
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "GPU_ENABLED=true but no CUDA GPU was detected. "
+                "Either install the CUDA drivers or set GPU_ENABLED=auto."
+            )
+        return 0
+    # "auto"
+    return 0 if torch.cuda.is_available() else -1
+
+
 def ensure_crit_pipe(model_name: str = _CRIT_MODEL_NAME):
     """Lazy-init zero-shot pipeline. Can be used by NLU component and actions."""
     global _crit_pipe
     if _crit_pipe is None:
         with _crit_lock:
             if _crit_pipe is None:
-                device = 0 if torch.cuda.is_available() else -1
+                device = _resolve_device()
                 logger.debug(
-                    "Initializing zero-shot criticality pipeline (%s) on device %s",
+                    "Initializing zero-shot criticality pipeline (%s) on device %s "
+                    "(GPU_ENABLED=%s)",
                     model_name,
                     device,
+                    os.environ.get("GPU_ENABLED", "auto"),
                 )
                 _crit_pipe = pipeline(
                     "zero-shot-classification",
@@ -669,9 +719,11 @@ class CriticalityZeroShotComponent(GraphComponent):
         self.boost_from_emotion = config.get("boost_from_emotion", True)
         self.heuristics_enabled = config.get("heuristics_enabled", True)
         self.cache_enabled = config.get("cache", True)
+        self._cache_max_size = config.get("cache_max_size", 512)
 
-        # Simple in-memory cache: (emotion|text) -> inference result
-        self._cache: Dict[str, Dict[str, Any]] = {}
+        # LRU cache capped at cache_max_size entries (OrderedDict, oldest evicted first)
+        from collections import OrderedDict
+        self._cache: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
 
         logger.debug(
             "Initialized CriticalityZeroShotComponent with model=%s, "
@@ -706,6 +758,7 @@ class CriticalityZeroShotComponent(GraphComponent):
 
             cache_key = self._key(text, emotion)
             if self.cache_enabled and cache_key in self._cache:
+                self._cache.move_to_end(cache_key)
                 result = self._cache[cache_key]
             else:
                 result = infer_criticality_for_text(
@@ -719,6 +772,8 @@ class CriticalityZeroShotComponent(GraphComponent):
                 )
                 if self.cache_enabled:
                     self._cache[cache_key] = result
+                    if len(self._cache) > self._cache_max_size:
+                        self._cache.popitem(last=False)  # evict oldest
 
             level = result["criticality_level"]
             score = float(result["criticality_score"])

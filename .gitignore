@@ -4,3 +4,15 @@ models/*
 .venv/*
 /components/__pycache__
 /actions/__pycache__
+__pycache__/
+*.pyc
+
+# Environment — never commit secrets
+.env
+
+# Docker build artifacts
+*.tar.gz
+
+# Runtime-generated session data — not source code
+datasets/conversation_sessions.csv
+datasets/aspect_sentiment_sessions.csv

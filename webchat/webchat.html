@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <title>Customer Service Chatbot</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
   <style>html,body,#webchat{height:100%;margin:0;font-family:system-ui,Arial,sans-serif}</style>
 </head>
 <body>
@@ -16,17 +17,32 @@
         return;
       }
       console.log("rasa-webchat loaded, mounting…");
+      // Use an explicit override if injected by the server, otherwise derive from
+      // the current page origin so the widget works on any host (HTTP or HTTPS).
+      const rasaUrl = window.__RASA_URL__ ||
+        (window.location.protocol + "//" + window.location.hostname + ":5005");
       window.WebChat.default(
         {
           selector: "#webchat",
           initPayload: "/greet",
-          socketUrl: "http://127.0.0.1:5005",   // use 127.0.0.1 to avoid IPv6 oddities
+          socketUrl: rasaUrl,
           socketPath: "/socket.io/",
-          title: "Alphea 🤖",
-          subtitle: "Customer Service Chatbot",
+          title: "Alphea",
+          subtitle: "AI Customer Assistant",
           showFullScreenButton: true,
           showCloseButton: true,
-          params: { storage: "session" },
+          params: {
+            storage: "session",
+            backgroundColor: "#ffffff",
+            headerColor: "#4f46e5",
+            primaryColor: "#4f46e5",
+            secondaryColor: "#eef2ff",
+            textColor: "#111827",
+            userTextColor: "#1e1b4b",
+            assistantBubbleColor: "#f3f4f6",
+            inputColor: "#ffffff",
+            inputBorderColor: "#e5e7eb"
+          },
 	  socketOptions: { transports: ["polling"] }
           // customData: { language: "en" },
         },

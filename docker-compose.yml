@@ -1,0 +1,151 @@
+version: "3.9"
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${DB_NAME:-chatbot}
+      POSTGRES_USER:     ${DB_USER:-chatbot}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-chatbot}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-chatbot} -d ${DB_NAME:-chatbot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Dashboard (Flask) ───────────────────────────────────────────────────────
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-chatbot}:${DB_PASSWORD:-chatbot}@postgres:5432/${DB_NAME:-chatbot}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── Rasa Action Server ──────────────────────────────────────────────────────
+  rasa-actions:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.actions
+    restart: unless-stopped
+    ports:
+      - "5055:5055"
+    env_file: .env
+    environment:
+      DASHBOARD_BACKEND_URL: http://dashboard:5001
+      GPU_ENABLED: ${GPU_ENABLED:-auto}
+    # ── GPU acceleration (optional) ───────────────────────────────────────────
+    # Uncomment the block below to enable GPU access for the AI models.
+    # Prerequisites: nvidia-container-toolkit installed on the host, and
+    # GPU_ENABLED=true set in your .env file.
+    #
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    volumes:
+      - ./actions:/app/actions
+      - ./components:/app/components
+      - ./integrations:/app/integrations
+      - ./observability:/app/observability
+      - ./data/criticality_keywords.yml:/app/data/criticality_keywords.yml
+      - ./datasets:/app/datasets
+      - hf_cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5055/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Rasa Dialog Server ──────────────────────────────────────────────────────
+  rasa:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.rasa
+    restart: unless-stopped
+    ports:
+      - "5005:5005"
+    env_file: .env
+    environment:
+      DB_HOST:     postgres
+      DB_PORT:     5432
+      DB_NAME:     ${DB_NAME:-chatbot}
+      DB_USER:     ${DB_USER:-chatbot}
+      DB_PASSWORD: ${DB_PASSWORD:-chatbot}
+      RASA_ACTION_ENDPOINT: http://rasa-actions:5055/webhook
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rasa-actions:
+        condition: service_healthy
+      dashboard:
+        condition: service_healthy
+    volumes:
+      - ./models:/app/models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5005/version')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Prometheus ──────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+
+  # ── Grafana ─────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.0
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER:     ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP:     "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
+volumes:
+  postgres_data:
+  hf_cache:
+  prometheus_data:
+  grafana_data:

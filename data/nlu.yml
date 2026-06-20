@@ -183,6 +183,18 @@ nlu:
     - send it to a different address
     - I typed the wrong address
     - can I update my shipping info?
+    - I need to fix my shipping address
+    - I entered the wrong address by mistake
+    - can you send my order to a different address?
+    - I want to change where the order is delivered
+    - my delivery address is incorrect
+    - please update where you are sending my order
+    - I put the wrong postcode
+    - can I change my delivery details?
+    - I need to correct my shipping details
+    - update the address on my order please
+    - the address I gave is wrong, can you fix it?
+    - I accidentally used my old address
 
 - intent: talk_to_human
   examples: |
@@ -194,14 +206,13 @@ nlu:
     - I want to speak to a real person
     - let me talk to customer service
     - stop the bot and give me an agent
-    - I need to fix my shipping address
-    - I entered the wrong address by mistake
-    - can you send my order to a different address?
-    - I want to change where the order is delivered
     - I want to talk to customer service
     - stop the bot, give me a real person
     - can a human help me with this?
     - I’d rather speak with an agent
+    - let me speak to someone
+    - I need to talk to a real person please
+    - transfer me to an agent
 
 - intent: urgent_contact
   examples: |
@@ -346,11 +357,11 @@ nlu:
     - I’m satisfied overall
 - intent: product_feedback_negative
   examples: |
-    - I'm unhappy with my product
-    - I'm disappointed with my purchase
+    - I’m unhappy with my product
+    - I’m disappointed with my purchase
     - the product is bad
-    - it doesn't work as expected
-    - I'm not satisfied
+    - it doesn’t work as expected
+    - I’m not satisfied
     - terrible quality
     - total waste of money
     - worst purchase ever
@@ -366,28 +377,41 @@ nlu:
     - the screen has a defect
     - the material feels cheap
     - missing parts in the box
-    - I want to return this product
-    - I want a refund
     - this is unacceptable
     - I’m really frustrated with this product
+    - very poor quality, not what I expected
+    - I would not recommend this to anyone
+    - completely useless product
 - intent: product_feedback_mixed
   examples: |
     - I love the design but the battery is awful
     - the camera is great but it overheats
-    - nice product overall, however it's too expensive
+    - nice product overall, however it’s too expensive
     - I’m happy with it, but it keeps crashing
     - it works fine, except the performance is slow
     - great quality, but delivery was late
+    - the product is good but customer service was terrible
+    - delivery was fast although the packaging was damaged
+    - I like the features however the battery drains too fast
+    - it looks great in person but the app is very buggy
+    - easy to set up, though it disconnects frequently
+    - the price is fair but the quality could be better
+    - mostly satisfied but I expected faster delivery
+    - works as described, though the instructions are confusing
+    - great value for money but it arrived with a small scratch
+    - I enjoyed using it but it stopped working after a week
+    - the support team was helpful even though the product itself is disappointing
+    - fast delivery, however the item was not as described
 - intent: out_of_scope_general
   examples: |
      - tell me about quantum physics
-     - what's the meaning of life
+     - what’s the meaning of life
      - who won the game last night
      - do you believe in aliens
      - how to cook pasta
      - what is 2 + 2
-     - what's the weather like in London?
-     - define the word 'ephemeral'
+     - what’s the weather like in London?
+     - define the word ‘ephemeral’
      - is Pluto a planet or not?
      - what time is it in Tokyo?
      - what year did the Titanic sink?
@@ -397,6 +421,22 @@ nlu:
      - who is the president of another country?
      - tell me a random fun fact
      - what movie should I watch tonight?
+     - asdfghjkl qwerty
+     - zxcvbnm asdfgh
+     - pizza recipe lasagna
+     - buy groceries milk eggs bread
+     - football basketball tennis swimming
+     - random words here nothing important
+     - blah blah blah test test
+     - xkcd lorem ipsum dolor
+     - qwerty uiop asdf ghjkl zxcv bnm
+     - 123456789 abcdef ghijkl
+     - hello world foo bar baz
+     - cat dog elephant giraffe pizza
+     - monday tuesday wednesday nonsense
+     - aaaaaa bbbbbb cccccc
+     - nothing relevant to shopping
+     - I like trains and sandwiches
 
 - intent: out_of_scope_personal_distress
   examples: |
@@ -417,6 +457,23 @@ nlu:
      - I feel like I can’t cope anymore
      - I’m going through something very painful
      - I just need someone to listen to me right now
+- intent: out_of_scope_crisis
+  examples: |
+    - I want to kill myself
+    - I want to end my life
+    - I don't want to live anymore
+    - I'm thinking about suicide
+    - I'm going to hurt myself
+    - I want to harm myself
+    - I feel like I can't go on anymore
+    - I can't take this anymore and I want to end it
+    - I just want everything to stop
+    - I have thoughts of ending it all
+    - I feel like hurting myself
+    - I'm not okay and I don't want to be here anymore
+    - life isn't worth living
+    - I'm going to do something to myself
+
 # --- RegEx and Lookup Tables ---
 - regex: order_id
   examples: |

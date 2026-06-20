@@ -1,0 +1,30 @@
+FROM python:3.10-slim
+
+# Build deps for psycopg2 / torch
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc g++ libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install CPU-only torch first to keep the image smaller
+RUN pip install --no-cache-dir torch==2.* --index-url https://download.pytorch.org/whl/cpu
+
+RUN pip install --no-cache-dir \
+    rasa-sdk==3.6.* \
+    transformers==4.* \
+    sentence-transformers==2.* \
+    requests \
+    pyyaml \
+    psycopg2-binary==2.9.* \
+    structlog==23.*
+
+COPY actions/       ./actions/
+COPY components/    ./components/
+COPY integrations/  ./integrations/
+COPY observability/ ./observability/
+COPY data/criticality_keywords.yml ./data/
+
+EXPOSE 5055
+
+CMD ["python", "-m", "rasa_sdk", "--actions", "actions", "--port", "5055"]

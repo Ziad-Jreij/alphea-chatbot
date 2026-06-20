@@ -1,85 +1,15 @@
-#### This file contains tests to evaluate that your bot behaves as expected.
-#### If you want to learn more, please see the docs: https://rasa.com/docs/rasa/testing-your-assistant
+#### End-to-end test stories — all intents/actions must exist in domain.yml
 
 stories:
-- story: happy path 1
-  steps:
-  - user: |
-      hello there!
-    intent: greet
-  - action: utter_greet
-  - user: |
-      amazing
-    intent: mood_great
-  - action: utter_happy
 
-- story: happy path 2
-  steps:
-  - user: |
-      hello there!
-    intent: greet
-  - action: utter_greet
-  - user: |
-      amazing
-    intent: mood_great
-  - action: utter_happy
-  - user: |
-      bye-bye!
-    intent: goodbye
-  - action: utter_goodbye
-
-- story: sad path 1
+- story: greet and goodbye
   steps:
   - user: |
       hello
     intent: greet
   - action: utter_greet
   - user: |
-      not good
-    intent: mood_unhappy
-  - action: utter_cheer_up
-  - action: utter_did_that_help
-  - user: |
-      yes
-    intent: affirm
-  - action: utter_happy
-
-- story: sad path 2
-  steps:
-  - user: |
-      hello
-    intent: greet
-  - action: utter_greet
-  - user: |
-      not good
-    intent: mood_unhappy
-  - action: utter_cheer_up
-  - action: utter_did_that_help
-  - user: |
-      not really
-    intent: deny
-  - action: utter_goodbye
-
-- story: sad path 3
-  steps:
-  - user: |
-      hi
-    intent: greet
-  - action: utter_greet
-  - user: |
-      very terrible
-    intent: mood_unhappy
-  - action: utter_cheer_up
-  - action: utter_did_that_help
-  - user: |
-      no
-    intent: deny
-  - action: utter_goodbye
-
-- story: say goodbye
-  steps:
-  - user: |
-      bye-bye!
+      bye
     intent: goodbye
   - action: utter_goodbye
 
@@ -89,3 +19,46 @@ stories:
       are you a bot?
     intent: bot_challenge
   - action: utter_iamabot
+
+- story: ask order status without order id
+  steps:
+  - user: |
+      where is my order?
+    intent: ask_order_status
+  - action: order_status_form
+  - active_loop: order_status_form
+
+- story: talk to human escalation
+  steps:
+  - user: |
+      I want to speak with a real person
+    intent: talk_to_human
+  - action: action_escalate_to_human
+
+- story: refund policy inquiry
+  steps:
+  - user: |
+      what is your refund policy?
+    intent: refund_policy
+  - action: utter_refund_policy
+
+- story: shipping times inquiry
+  steps:
+  - user: |
+      how long does shipping take?
+    intent: shipping_times
+  - action: utter_shipping_times
+
+- story: out of scope general
+  steps:
+  - user: |
+      can you recommend a good movie?
+    intent: out_of_scope_general
+  - action: utter_out_of_scope
+
+- story: product positive feedback
+  steps:
+  - user: |
+      I love this product!
+    intent: product_feedback_positive
+  - action: utter_thanks_positive_feedback

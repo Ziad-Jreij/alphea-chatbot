@@ -1,0 +1,14 @@
+# /metrics on the dashboard is intentionally unauthenticated so Prometheus can
+# scrape it without token management. In production, restrict access at the
+# network/firewall level: Prometheus (port 9090) and Grafana (port 3000) should
+# NOT be exposed to the public internet — bind them to an internal/VPN network
+# or put them behind a reverse proxy with auth (e.g. nginx + basic auth).
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "alphea-dashboard"
+    static_configs:
+      - targets: ["dashboard:5001"]
+    metrics_path: /metrics

@@ -1,0 +1,23 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir \
+    flask==3.0.* \
+    flask-cors==4.0.* \
+    sqlalchemy==2.0.* \
+    psycopg2-binary==2.9.* \
+    PyJWT==2.10.* \
+    structlog==23.* \
+    prometheus-client==0.20.* \
+    gunicorn==21.*
+
+COPY dashboard/app.py ./app.py
+COPY dashboard/dashboard.html dashboard/login.html ./
+COPY webchat/webchat.html ./
+COPY observability/ ./observability/
+
+EXPOSE 5001
+
+# 2 workers is enough for an internal dashboard; scale up with GUNICORN_WORKERS env var
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:5001 --workers ${GUNICORN_WORKERS:-2} --timeout 60 --access-logfile - app:app"]

@@ -10,58 +10,19 @@ import csv
 from rasa_sdk.events import SlotSet, EventType, FollowupAction
 import logging
 from threading import Lock
-from components.emotion import ensure_emotion_pipe, coarse_from_label, top_emotion 
+from components.emotion import ensure_emotion_pipe, coarse_from_label, top_emotion, map_to_business_emotion
 from components.criticality import infer_criticality_for_text
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from components.absa import extract_aspect_opinions
-NOW = datetime.now()
+from integrations.order_provider import get_order_provider
+from integrations.validators import validate_order_id, validate_email, sanitize_address, sanitize_text
+from observability.logging_config import configure_logging, get_logger
+configure_logging()
 _init_lock = Lock()
-DASHBOARD_BACKEND_URL = "http://localhost:5001"  # adjust if needed
-# Fake database for demo
-ORDER_DB = {
-    # Classic shipped order – cannot cancel, can start return later
-    "ORD-12345": {
-        "status": "Shipped",
-        "eta": "2 days",
-        "created_at": (NOW - timedelta(days=2)).isoformat(),
-        "address": "123 Main St, Nicosia, 10001",
-        "email": "alex@example.com",
-        "total": 89.90,
-    },
-    # Recently placed, still processing – can cancel
-    "ORD-98765": {
-        "status": "Processing",
-        "eta": "4 days",
-        "created_at": (NOW - timedelta(hours=3)).isoformat(),
-        "address": "45 Green Rd, Larnaca, 6023",
-        "email": "maria@example.com",
-        "total": 149.50,
-    },
-    # Delivered order – for return / damage scenarios
-    "ORD-55555": {
-        "status": "Delivered",
-        "eta": "Delivered",
-        "created_at": (NOW - timedelta(days=5)).isoformat(),
-        "address": "10 Beach Ave, Limassol, 3300",
-        "email": "john@example.com",
-        "total": 59.00,
-    },
-    # On hold – useful for “update address” scenarios
-    "ORD-77777": {
-        "status": "On hold",
-        "eta": "TBD",
-        "created_at": (NOW - timedelta(hours=10)).isoformat(),
-        "address": "78 Lake St, Paphos, 8100",
-        "email": "sofia@example.com",
-        "total": 220.00,
-    },
-}
+DASHBOARD_BACKEND_URL = os.environ.get("DASHBOARD_BACKEND_URL", "http://localhost:5001")
 
-ORDER_RE = re.compile(r"^ORD-\d{5}$", re.IGNORECASE)
-EMAIL_RE = re.compile(r"[^@]+@[^@]+\.[^@]+")
-
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _CRIT2SCORE = {"low": 0.3, "medium": 0.5, "high": 0.75}
 # Conversation-level thresholds are intentionally higher than per-turn thresholds.
@@ -197,10 +158,7 @@ def clear_context_slots() -> List[Dict[Text, Any]]:
     """Clear slots that shouldn't leak across flows."""
     return [SlotSet("order_id", None), SlotSet("email", None), SlotSet("issue_description", None)]
 def normalize_order_id(s: str) -> Text | None:
-    s = (s or "").strip().upper().replace(" ", "")
-    if s.startswith("ORD") and "-" not in s and len(s) == 8 and s[3:].isdigit():
-        s = f"ORD-{s[3:]}"
-    return s if ORDER_RE.fullmatch(s or "") else None
+    return validate_order_id(s)
 def _infer_emotion_slots(tracker):
     """Infer emotion + criticality for the latest user message and update conv-risk.
 
@@ -273,6 +231,7 @@ def _infer_emotion_slots(tracker):
     out = {
         # emotion (business-friendly bucket + smoothing reason)
         "top_emotion": top_label,
+        "top_emotion_score": float(top["score"]),
         "sentiment": sentiment,
         "emotion_tally": agg["emotion_tally"],
         "emotion_history": agg["emotion_history"],
@@ -598,8 +557,9 @@ def _build_absa_rows_for_message(
                 # Phase 2: explainability
                 "Match_Type":             a.get("aspect_match_type", "exact"),
                 "Similarity":             a.get("aspect_similarity", 1.0),
-                # Emotion context
-                "Emotion":                emotion_label,
+                # Emotion context (business bucket + confidence)
+                "Emotion":                map_to_business_emotion(emotion_label) if emotion_label else None,
+                "Emotion_Score":          tracker.get_slot("top_emotion_score"),
             }
         )
 
@@ -615,7 +575,7 @@ def _export_absa_rows(rows: List[Dict[str, Any]]) -> None:
         return
 
     base_dir = Path(os.path.dirname(os.path.abspath(__file__))).parent
-    csv_path = base_dir / "data" / "aspect_sentiment_sessions.csv"
+    csv_path = base_dir / "datasets" / "aspect_sentiment_sessions.csv"
 
     logger.info("[ABSA] Exporting %d rows to %s", len(rows), csv_path)
 
@@ -828,9 +788,10 @@ class ActionInferEmotion(Action):
 
         events: List[EventType] = [
             SlotSet("top_emotion", top_label),
+            SlotSet("top_emotion_score", float(top["score"])),
             SlotSet("sentiment", sentiment),
             SlotSet("emotion_tally", agg["emotion_tally"]),
-            SlotSet("emotion_history", agg["emotion_history"]),  # <-- add this
+            SlotSet("emotion_history", agg["emotion_history"]),
             SlotSet("overall_emotion", overall),
         ]
 
@@ -843,15 +804,17 @@ class ActionSoftAffirmation(Action):
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
         # prevent back-to-back soft prompts within 20 seconds
         last = tracker.get_slot("last_soft_affirmation_ts")
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if last:
             try:
                 last_dt = datetime.fromisoformat(last)
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
                 if (now - last_dt) < timedelta(seconds=20):
                     # silently skip repeating the same menu
                     return []
-            except Exception:
-                pass
+            except (ValueError, TypeError) as exc:
+                logger.warning("[soft_affirmation] Could not parse timestamp %r: %s", last, exc)
 
         dispatcher.utter_message(
             text="Got it—just to be sure, what would you like to do?",
@@ -927,7 +890,7 @@ class ValidateDamageReportForm(FormValidationAction):
         out["issue_description"] = None
         return out
 class ActionCancelOrder(Action):
-    def name(self) -> Text: 
+    def name(self) -> Text:
         return "action_cancel_order"
 
     def run(self, dispatcher, tracker, domain):
@@ -944,21 +907,9 @@ class ActionCancelOrder(Action):
             events.extend(export_events)
             return events
 
-        # 2) User does NOT confirm → resolved + export
-        if not confirm:
-            dispatcher.utter_message(text="Okay, I’ll keep the order as is.")
-            events: List[EventType] = clear_context_slots() + [
-                SlotSet("resolution_status", "resolved")
-            ]
-            export_events = ActionExportConversationSummary().run(
-                dispatcher, tracker, domain
-            )
-            events.extend(export_events)
-            return events
+        rec = get_order_provider().get_order(oid)
 
-        rec = ORDER_DB.get(oid)
-
-        # 3) Order not found → fallback + export
+        # 2) Order not found → fallback + export
         if not rec:
             dispatcher.utter_message(text=f"Order {oid} not found.")
             events: List[EventType] = clear_context_slots() + [
@@ -972,13 +923,25 @@ class ActionCancelOrder(Action):
 
         created = datetime.fromisoformat(rec.get("created_at", "2025-10-01"))
 
-        # 4) Cannot cancel (too late / shipped) → fallback + export
+        # 3) Check eligibility BEFORE asking/checking confirmation — show error immediately
         if rec["status"].lower() == "shipped" or datetime.now() - created > timedelta(hours=24):
             dispatcher.utter_message(
                 text=f"Order {oid} can’t be canceled now. You can start a return after delivery."
             )
             events: List[EventType] = clear_context_slots() + [
                 SlotSet("resolution_status", "fallback")
+            ]
+            export_events = ActionExportConversationSummary().run(
+                dispatcher, tracker, domain
+            )
+            events.extend(export_events)
+            return events
+
+        # 4) User does NOT confirm → resolved + export
+        if not confirm:
+            dispatcher.utter_message(text="Okay, I’ll keep the order as is.")
+            events: List[EventType] = clear_context_slots() + [
+                SlotSet("resolution_status", "resolved")
             ]
             export_events = ActionExportConversationSummary().run(
                 dispatcher, tracker, domain
@@ -1028,7 +991,7 @@ class ActionStartReturn(Action):
             return events
 
         # 2) Order not found → fallback + export
-        if oid not in ORDER_DB:
+        if not get_order_provider().get_order(oid):
             dispatcher.utter_message(text=f"Order {oid} not found.")
             events.extend(clear_context_slots())
             events.append(SlotSet("resolution_status", "fallback"))
@@ -1063,27 +1026,14 @@ class ActionLookupOrderStatusByEmail(Action):
     def run(self, dispatcher, tracker, domain):
         email = (tracker.get_slot("lookup_email") or "").strip().lower()
 
-        # Helper: find latest order for this email from ORDER_DB
-        def _find_order_by_email(target_email: str):
-            matches = []
-            for oid, data in ORDER_DB.items():
-                db_email = (data.get("email") or "").strip().lower()
-                if db_email == target_email:
-                    matches.append((oid, data))
-
-            # If multiple matches exist, pick the newest by created_at (ISO string)
-            if not matches:
-                return None, None
-
-            matches.sort(key=lambda x: x[1].get("created_at", ""), reverse=True)
-            return matches[0]  # (order_id, data)
-
         events: List[EventType] = []
 
         if email:
-            order_id, order = _find_order_by_email(email)
+            _orders  = get_order_provider().find_orders_by_email(email)
+            order    = _orders[0] if _orders else None
+            order_id = order["order_id"] if order else None
 
-            if order_id and order:
+            if order and order_id:
                 status = order.get("status", "Unknown")
                 eta = order.get("eta", "TBD")
 
@@ -1205,7 +1155,7 @@ class ActionLookupOrderStatus(Action):
             events.extend(export_events)
             return events
 
-        rec = ORDER_DB.get(order_id)
+        rec = get_order_provider().get_order(order_id)
 
         # Not found → fallback + export
         if not rec:
@@ -1286,8 +1236,9 @@ class ValidatePasswordResetForm(FormValidationAction):
         if tracker.get_slot("requested_slot") != "email":
             out["email"] = tracker.get_slot("email")
             return out
-        if value and EMAIL_RE.fullmatch(value.strip()):
-            out["email"] = value.strip()
+        normalized = validate_email(value)
+        if normalized:
+            out["email"] = normalized
             return out
         dispatcher.utter_message(response="utter_email_invalid")
         out["email"] = None
@@ -1340,7 +1291,7 @@ class ActionSessionStart(Action):
     ) -> List[EventType]:
         """Initialise analytics and conv-risk slots for each new session."""
 
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         events: List[EventType] = [
             SessionStarted(),
@@ -1462,6 +1413,18 @@ class ValidateCancelOrderForm(FormValidationAction):
     def name(self) -> Text:
         return "validate_cancel_order_form"
 
+    async def required_slots(self, domain_slots, _dispatcher, tracker, _domain):
+        oid = tracker.get_slot("order_id")
+        if oid:
+            rec = get_order_provider().get_order(oid)
+            if rec:
+                created = datetime.fromisoformat(rec.get("created_at", "2000-01-01"))
+                if rec["status"].lower() == "shipped" or datetime.now() - created > timedelta(hours=24):
+                    # Ineligible: skip confirm_cancel so the form completes immediately
+                    # and action_cancel_order shows the error without a prior misleading prompt
+                    return [s for s in domain_slots if s != "confirm_cancel"]
+        return list(domain_slots)
+
     def validate_order_id(
         self,
         value: Text,
@@ -1526,8 +1489,9 @@ class ValidateOrderLookupByEmailForm(FormValidationAction):
             return out
 
         # Validate email
-        if value and EMAIL_RE.fullmatch(value.strip()):
-            out["lookup_email"] = value.strip()
+        normalized = validate_email(value)
+        if normalized:
+            out["lookup_email"] = normalized
             return out
 
         dispatcher.utter_message(response="utter_email_invalid")
@@ -1650,6 +1614,15 @@ class ValidateAddressUpdateForm(FormValidationAction):
     def name(self) -> Text:
         return "validate_address_update_form"
 
+    async def required_slots(self, domain_slots, _dispatcher, tracker, _domain):
+        oid = tracker.get_slot("order_id")
+        if oid:
+            rec = get_order_provider().get_order(oid)
+            if rec and rec["status"].lower() == "shipped":
+                # Already shipped: skip new_address, action_update_address will show error
+                return [s for s in domain_slots if s != "new_address"]
+        return list(domain_slots)
+
     def validate_order_id(
         self,
         value: Text,
@@ -1707,12 +1680,13 @@ class ValidateAddressUpdateForm(FormValidationAction):
             out["new_address"] = tracker.get_slot("new_address")
             return out
 
-        if not value or len(value.strip()) < 8:
-            dispatcher.utter_message(text="Please provide the full address including city & ZIP.")
+        cleaned = sanitize_address(value)
+        if not cleaned or len(cleaned) < 8:
+            dispatcher.utter_message(text="Please provide a valid full address including city & ZIP.")
             out["new_address"] = None
             return out
 
-        out["new_address"] = value.strip()
+        out["new_address"] = cleaned
         return out
 class ActionExportConversationSummary(Action):
     def name(self) -> Text:
@@ -1767,20 +1741,26 @@ class ActionExportConversationSummary(Action):
             start_time = datetime.utcfromtimestamp(first_ts).isoformat()
 
         row = {
-            "Session_ID": session_id,
-            "Start_time": start_time,
-            "User_intent": primary_intent,
-            "Resolution_Status": resolution_status,
-            "Final_Sentiment": final_sentiment,
-            "Handoff_to_agent": "yes" if handoff else "no",
-            "total_messages": total_messages,
-            "conversation_duration": round(duration_seconds),
-            "Conversation_Feedback": conversation_feedback,
+            "Session_ID":              session_id,
+            "Start_time":              start_time,
+            "User_intent":             primary_intent,
+            "Resolution_Status":       resolution_status,
+            "Final_Sentiment":         final_sentiment,
+            "Top_Emotion":             map_to_business_emotion(tracker.get_slot("top_emotion") or "neutral"),
+            "Emotion_Score":           tracker.get_slot("top_emotion_score"),
+            "Criticality_Level":       tracker.get_slot("criticality_level") or "low",
+            "Criticality_Score":       tracker.get_slot("criticality_score"),
+            "Conversation_Escalation": tracker.get_slot("conversation_escalation") or "none",
+            "Criticality_Explanation": tracker.get_slot("criticality_explanation") or "",
+            "Handoff_to_agent":        "yes" if handoff else "no",
+            "total_messages":          total_messages,
+            "conversation_duration":   round(duration_seconds),
+            "Conversation_Feedback":   conversation_feedback,
         }
 
         logger.info("[dataset] row=%s", row)
 
-        csv_path = os.path.join("data", "conversation_sessions.csv")
+        csv_path = os.path.join("datasets", "conversation_sessions.csv")
         os.makedirs(os.path.dirname(csv_path), exist_ok=True)
 
         fieldnames = [
@@ -1789,6 +1769,12 @@ class ActionExportConversationSummary(Action):
             "User_intent",
             "Resolution_Status",
             "Final_Sentiment",
+            "Top_Emotion",
+            "Emotion_Score",
+            "Criticality_Level",
+            "Criticality_Score",
+            "Conversation_Escalation",
+            "Criticality_Explanation",
             "Handoff_to_agent",
             "total_messages",
             "conversation_duration",
@@ -1834,9 +1820,9 @@ class ActionUpdateAddress(Action):
         oid = tracker.get_slot("order_id")
         addr = tracker.get_slot("new_address")
 
-        # Missing data → fallback + export
-        if not oid or not addr:
-            dispatcher.utter_message(text="I need both the order ID and the new address.")
+        # Missing order ID → fallback + export
+        if not oid:
+            dispatcher.utter_message(text="I need the order ID to update the address.")
             events: List[EventType] = [SlotSet("resolution_status", "fallback")]
             export_events = ActionExportConversationSummary().run(
                 dispatcher, tracker, domain
@@ -1844,7 +1830,7 @@ class ActionUpdateAddress(Action):
             events.extend(export_events)
             return events
 
-        rec = ORDER_DB.get(oid)
+        rec = get_order_provider().get_order(oid)
 
         # Order not found → fallback + export
         if not rec:
@@ -1856,7 +1842,7 @@ class ActionUpdateAddress(Action):
             events.extend(export_events)
             return events
 
-        # Shipped: cannot update → fallback + export
+        # Check eligibility BEFORE asking for / using the address
         if rec["status"].lower() == "shipped":
             dispatcher.utter_message(
                 text=f"Order {oid} already shipped; I can’t change the address. Try carrier redirect."
@@ -1868,8 +1854,18 @@ class ActionUpdateAddress(Action):
             events.extend(export_events)
             return events
 
+        # addr should always be present here (form only collects it for eligible orders)
+        if not addr:
+            dispatcher.utter_message(text="I need the new address to proceed.")
+            events = clear_context_slots() + [SlotSet("resolution_status", "fallback")]
+            export_events = ActionExportConversationSummary().run(
+                dispatcher, tracker, domain
+            )
+            events.extend(export_events)
+            return events
+
         # Successfully updated → resolved + export
-        rec["address"] = addr
+        get_order_provider().update_address(oid, addr)
         dispatcher.utter_message(text=f"Address for {oid} updated to: {addr}.")
         events = clear_context_slots() + [SlotSet("resolution_status", "resolved")]
         export_events = ActionExportConversationSummary().run(
@@ -1920,7 +1916,9 @@ class ActionPushStateToDashboard(Action):
         domain: DomainDict,
     ) -> List[Dict[Text, Any]]:
 
+        import structlog
         sender_id = tracker.sender_id
+        structlog.contextvars.bind_contextvars(session_id=sender_id)
 
         last_user_msg = next(
             (e.get("text") for e in reversed(tracker.events) if e.get("event") == "user"),
@@ -1945,6 +1943,18 @@ class ActionPushStateToDashboard(Action):
 
         # Emotion/sentiment
         top_emotion = tracker.get_slot("top_emotion") or tracker.get_slot("overall_emotion") or "n/a"
+        # top_emotion_score is a float slot that may not be initialised in the deployed model;
+        # fall back to scanning the event log for the most recent SlotSet with a real value.
+        top_emotion_score = tracker.get_slot("top_emotion_score") or next(
+            (
+                e.get("value")
+                for e in reversed(tracker.events)
+                if e.get("event") == "slot"
+                and e.get("name") == "top_emotion_score"
+                and e.get("value") is not None
+            ),
+            None,
+        )
         sentiment = tracker.get_slot("sentiment") or "n/a"
 
         # ---- Decide dashboard status color (green / black / red) ----
@@ -1962,6 +1972,7 @@ class ActionPushStateToDashboard(Action):
             "status": status,
             "criticality": criticality_level,
             "emotion": top_emotion,
+            "emotion_score": top_emotion_score,
 
             # Extra metadata (useful when agent clicks a session)
             "sentiment": sentiment,
@@ -1974,7 +1985,7 @@ class ActionPushStateToDashboard(Action):
 
             "last_user_message": last_user_msg,
             "last_bot_message": last_bot_msg,
-            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
 
             # ── Phase 2: manager-level ABSA insights ──────────────────────────
             "absa_insights": _build_absa_insights(_absa_cache.get(sender_id, [])),
@@ -1987,6 +1998,6 @@ class ActionPushStateToDashboard(Action):
                 timeout=1,
             )
         except Exception as e:
-            print(f"[Dashboard] Failed to update session: {e}")
+            logger.error("dashboard_push_failed", session_id=payload.get("session_id"), error=str(e))
 
         return []

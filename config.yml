@@ -21,13 +21,13 @@ pipeline:
   - name: ResponseSelector
     epochs: 60
   - name: FallbackClassifier
-    threshold: 0.4
+    threshold: 0.6
     ambiguity_threshold: 0.1
 
   - name: components.emotion.EmotionClassifierComponent
 
   - name: components.criticality.CriticalityZeroShotComponent
-    model_name: "facebook/bart-large-mnli"   
+    model_name: "MoritzLaurer/deberta-v3-base-zeroshot-v2.0"
     hypothesis_template: "This support request is {}."
     labels: ["low urgency", "medium urgency", "high urgency"]
     boost_from_emotion: true

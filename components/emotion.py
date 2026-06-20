@@ -1,12 +1,33 @@
 # components/emotion.py
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, Text
-from rasa.engine.graph import GraphComponent
-from rasa.engine.recipes.default_recipe import DefaultV1Recipe
-from rasa.engine.storage.resource import Resource
-from rasa.engine.storage.storage import ModelStorage
-from rasa.shared.nlu.training_data.message import Message
-from rasa.shared.nlu.constants import TEXT
+
+# Rasa framework classes are only available in the dialog server (rasa package),
+# not in the action server (rasa-sdk only). Guard so this module can be imported
+# from actions/ without the full rasa package installed.
+try:
+    from rasa.engine.graph import GraphComponent
+    from rasa.engine.recipes.default_recipe import DefaultV1Recipe
+    from rasa.engine.storage.resource import Resource
+    from rasa.engine.storage.storage import ModelStorage
+    from rasa.shared.nlu.training_data.message import Message
+    from rasa.shared.nlu.constants import TEXT
+except ImportError:
+    # Running inside the action server (rasa-sdk only, no full rasa package).
+    # Provide stubs so the module loads; the NLU component class is never
+    # instantiated here — only the utility functions are used.
+    class GraphComponent:  # type: ignore[no-redef]
+        pass
+    class DefaultV1Recipe:  # type: ignore[no-redef]
+        @classmethod
+        def register(cls, **kwargs):
+            return lambda f: f
+    Resource = None  # type: ignore[assignment]
+    ModelStorage = None  # type: ignore[assignment]
+    Message = None  # type: ignore[assignment]
+    TEXT = "text"
+import os
+
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, TextClassificationPipeline
 from threading import Lock
 import torch
@@ -98,12 +119,33 @@ _init_lock = Lock()
 _pipe: TextClassificationPipeline | None = None
 
 
+def _resolve_device() -> int:
+    """Return the torch device index based on the GPU_ENABLED env var.
+
+    GPU_ENABLED=auto  (default) — use GPU when CUDA is available, otherwise CPU.
+    GPU_ENABLED=true            — require GPU; raise at startup if none found.
+    GPU_ENABLED=false           — always use CPU regardless of hardware.
+    """
+    setting = os.environ.get("GPU_ENABLED", "auto").lower().strip()
+    if setting == "false":
+        return -1
+    if setting == "true":
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "GPU_ENABLED=true but no CUDA GPU was detected. "
+                "Either install the CUDA drivers or set GPU_ENABLED=auto."
+            )
+        return 0
+    # "auto"
+    return 0 if torch.cuda.is_available() else -1
+
+
 def ensure_emotion_pipe() -> TextClassificationPipeline:
     global _pipe
     if _pipe is None:
         with _init_lock:
             if _pipe is None:
-                device = 0 if torch.cuda.is_available() else -1
+                device = _resolve_device()
                 tok = AutoTokenizer.from_pretrained(MODEL_NAME)
                 mdl = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
                 _pipe = TextClassificationPipeline(
@@ -207,6 +249,7 @@ class EmotionClassifierComponent(GraphComponent):
             business_label, top3 = top_emotion(text)
             m.set("top_emotion", business_label, add_to_output=True)
             m.set("top_emotion_display", BUSINESS_EMOTION_DISPLAY.get(business_label, business_label), add_to_output=True)
+            m.set("top_emotion_score", float(top3[0][1]) if top3 else 0.0, add_to_output=True)
             # Smoothing is applied at the action layer (where session history lives)
             # NLU component sets the single-turn value; smoothing happens in actions.py
         return messages

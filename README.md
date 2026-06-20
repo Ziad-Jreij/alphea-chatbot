@@ -1,2 +1,253 @@
-# Customer-Service-Chatbot-
-This Chatbot is build for customer service, where all businesses could implement it on their platforms whether on their website or application. This chatbot inlcudes four interesting,yet related features which are, Emotion detection, Criticality, Escalation and Aspect based Sentiment Analysis. 
+# Alphea — AI Customer Service Chatbot
+
+Alphea is a production-ready e-commerce customer service chatbot built on Rasa 3.x. It combines three custom NLU components — real-time emotion detection, zero-shot criticality scoring, and aspect-based sentiment analysis — with a Flask admin dashboard that lets support teams monitor live conversations, track escalations, and export session data. The full stack runs in Docker with PostgreSQL persistence and a Prometheus/Grafana monitoring layer.
+
+---
+
+## Architecture
+
+```
+                        ┌────────────────────────────────────────────────────┐
+                        │                  Docker Network                     │
+                        │                                                      │
+  Browser / Widget ────▶│  Rasa Dialog Server  :5005                          │
+                        │  ┌───────────────────────────────────────────────┐  │
+                        │  │  NLU pipeline                                 │  │
+                        │  │   1. WhitespaceTokenizer → DIETClassifier     │  │
+                        │  │   2. EmotionClassifierComponent (DistilBERT)  │  │
+                        │  │   3. CriticalityZeroShotComponent (DeBERTa)   │  │
+                        │  └──────────────────┬────────────────────────────┘  │
+                        │                     │ webhook                        │
+                        │                     ▼                                │
+                        │  Rasa Actions Server  :5055                          │
+                        │  • order lookups (mock / REST)                       │
+                        │  • ABSA per turn                                     │
+                        │  • pushes session state → Dashboard                  │
+                        │                     │                                │
+                        │          ┌──────────┴──────────┐                     │
+                        │          │                     │                     │
+                        │          ▼                     ▼                     │
+                        │  PostgreSQL  :5432     Dashboard (Flask)  :5001      │
+                        │  • Rasa tracker store  • JWT-protected API           │
+                        │  • chat_sessions table • session monitoring          │
+                        │                        • manager overview + CSV      │
+                        │                                                      │
+                        │  Prometheus  :9090     Grafana  :3000                │
+                        │  scrapes /metrics      visualises all metrics        │
+                        └────────────────────────────────────────────────────┘
+```
+
+---
+
+## Prerequisites
+
+- **Docker** ≥ 24 and **Docker Compose** ≥ 2.20
+- **4 GB RAM** minimum (models load into the actions container; 6 GB recommended)
+- A trained Rasa model `.tar.gz` placed in `./models/` (see [Training](#training))
+- Internet access on first startup so the actions container can download model weights from HuggingFace Hub (~700 MB total for all three AI models; cached in the `hf_cache` Docker volume)
+
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/Ziad-Jreij/alphea-chatbot.git
+cd alphea-chatbot
+
+# Copy the example env file and edit secrets before going to production
+cp .env.example .env
+
+# Bring up the full stack (postgres → dashboard → rasa-actions → rasa → monitoring)
+docker-compose up --build
+```
+
+Services come up in dependency order. On first run, wait ~60 s for the actions container to download and cache model weights.
+
+| Service | URL |
+|---|---|
+| Rasa REST API | http://localhost:5005 |
+| Action Server | http://localhost:5055 |
+| Admin Dashboard | http://localhost:5001 |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3000 |
+
+Log in to the dashboard at http://localhost:5001 with the credentials set in `DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD`.
+
+### Training
+
+If you don't have a pre-built model, run training inside the Rasa container:
+
+```bash
+docker-compose run --rm rasa train
+```
+
+The model is written to `./models/` and picked up automatically on the next `docker-compose up`.
+
+---
+
+## Performance & Hardware
+
+### Default behaviour
+
+The AI models run on **GPU if one is available, CPU otherwise** — no configuration required. The `GPU_ENABLED=auto` default in `.env.example` handles this automatically. If you deploy on a machine without a GPU, the stack will start and work correctly; messages will just take longer to score (see the latency table below).
+
+### Model benchmark — criticality component
+
+The criticality component has been benchmarked on 40 labelled customer-service messages with the heuristic guardrail layer **disabled** (raw model output only). Real-world accuracy is higher because the keyword and safety-rule layers intercept the most obvious high-urgency messages before the model is called.
+
+| Model | Accuracy | Macro-F1 | CPU latency | Size | Status |
+|---|---|---|---|---|---|
+| **DeBERTa-v3-base-zeroshot-v2.0** | **60.0%** | **58.6%** | ~1500 ms | 184 MB | ✅ Current |
+| BART-large-mnli | 37.5% | 31.6% | ~400 ms | 1.6 GB | ❌ Replaced |
+| DeBERTa-v3-xsmall | ~65–70% | — | ~450 ms | 70 MB | CPU alternative |
+| xtremedistil-l6 | ~50% | — | ~27 ms | 25 MB | Too inaccurate |
+
+**Why DeBERTa-v3-base was chosen over BART:** BART had a severe bias toward predicting "medium" for almost every message (84.6% medium recall, only 15.4% high recall), making it nearly useless for catching genuine escalations. DeBERTa's high-class precision is 88.9% — when it says escalate, it is almost always right.
+
+**Per-class breakdown for the current model (DeBERTa-v3-base, heuristics off):**
+
+| Class | Precision | Recall | F1 | Notes |
+|---|---|---|---|---|
+| LOW | 52.2% | 85.7% | 64.9% | Good at clearing routine queries |
+| MEDIUM | 50.0% | 30.8% | 38.1% | Weakest class; keyword layer compensates |
+| **HIGH** | **88.9%** | **61.5%** | **72.7%** | Most critical — high precision, few false alarms |
+
+With the heuristic layer enabled (production default), HIGH recall rises above 90% because safety, finance, and medical keywords are caught before the model runs.
+
+### CPU vs GPU latency
+
+| Hardware | Median latency / message | Recommended for |
+|---|---|---|
+| CPU only | ~1500 ms | Development, low-traffic demos (< 5 concurrent users) |
+| NVIDIA GPU (e.g. T4) | ~30–50 ms | Production, > 10 concurrent users |
+
+**CPU is usable** thanks to the built-in LRU response cache (512 entries, configurable via `cache_max_size` in `config.yml`). Repeated or structurally similar messages within a session are never re-inferred. For a typical support conversation where many turns repeat intent patterns, most turns hit the cache.
+
+**GPU is recommended for production.** At ~40 ms per message the latency is invisible to users regardless of traffic.
+
+### Controlling GPU usage
+
+Set `GPU_ENABLED` in your `.env`:
+
+| Value | Behaviour |
+|---|---|
+| `auto` *(default)* | Uses GPU when CUDA is available; silently falls back to CPU if not. |
+| `true` | Requires a GPU — the actions container **refuses to start** without one. Use in production to catch misconfigured hosts early. |
+| `false` | Forces CPU regardless of hardware. Useful for reproducibility or cost-constrained deployments. |
+
+### Enabling GPU in Docker Compose
+
+**1. Install the NVIDIA Container Toolkit on the host:**
+
+```bash
+# Ubuntu / Debian
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt update && sudo apt install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+
+**2. Uncomment the `deploy` block in `docker-compose.yml`** under the `rasa-actions` service:
+
+```yaml
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+```
+
+**3. Set `GPU_ENABLED=true` in your `.env` and restart:**
+
+```bash
+GPU_ENABLED=true
+docker-compose up --build rasa-actions
+```
+
+### CPU-only alternative model
+
+If you cannot use a GPU and need faster CPU inference, you can swap to the xsmall variant (~450 ms, comparable accuracy) by changing one line in `config.yml`:
+
+```yaml
+- name: components.criticality.CriticalityZeroShotComponent
+  model_name: "MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33"
+```
+
+The pipeline API is identical — no other changes required.
+
+---
+
+## Environment Variables
+
+All variables are documented in `.env.example`. Copy it to `.env` and fill in real values before deploying.
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | `postgresql://chatbot:chatbot@localhost:5432/chatbot` | SQLAlchemy URL for the dashboard (uses `postgres` hostname inside Docker) |
+| `DB_HOST` | `localhost` | Postgres host for the Rasa SQL tracker store |
+| `DB_PORT` | `5432` | Postgres port |
+| `DB_NAME` | `chatbot` | Database name |
+| `DB_USER` | `chatbot` | Database user |
+| `DB_PASSWORD` | `chatbot` | Database password — **change in production** |
+| `JWT_SECRET_KEY` | `dev-secret-…` | Signs dashboard JWT tokens — **must be changed in production** |
+| `DASHBOARD_USERNAME` | `admin` | Admin login username |
+| `DASHBOARD_PASSWORD` | `changeme` | Admin login password — **change in production** |
+| `DASHBOARD_BACKEND_URL` | `http://localhost:5001` | URL the action server uses to push session state |
+| `DASHBOARD_PORT` | `5001` | Port the Flask dashboard listens on |
+| `RASA_ACTION_ENDPOINT` | `http://localhost:5055/webhook` | Action server webhook URL |
+| `CORS_ORIGINS` | `*` | Comma-separated allowed origins for the dashboard API |
+| `FLASK_DEBUG` | `false` | Enable Flask debug mode (never `true` in production) |
+| `GUNICORN_WORKERS` | `2` | Dashboard gunicorn worker count |
+| `GRAFANA_USER` | `admin` | Grafana admin username |
+| `GRAFANA_PASSWORD` | `changeme` | Grafana admin password |
+| `GPU_ENABLED` | `auto` | `auto` / `true` / `false` — see [GPU Acceleration](#gpu-acceleration) |
+| `ORDER_PROVIDER` | `mock` | `mock` for development, `rest` for a real backend |
+| `ORDER_API_BASE_URL` | _(unset)_ | Required when `ORDER_PROVIDER=rest` |
+| `ORDER_API_KEY` | _(unset)_ | Bearer token sent to the order API |
+| `ORDER_API_TIMEOUT` | `10` | HTTP timeout (seconds) for order API calls |
+
+---
+
+## AI Components
+
+### 1. Emotion Detection (`components/emotion.py`)
+
+Uses a DistilBERT model fine-tuned on the GoEmotions dataset to classify each user message into one of six business-friendly emotion buckets: **frustrated**, **anxious**, **disappointed**, **confused**, **neutral**, and **satisfied**. A recency-weighted smoothing window (last 4 turns) prevents a single ambiguous message from flipping the displayed emotion. The raw label and a session-level emotion tally are stored as Rasa slots and forwarded to the dashboard on every turn.
+
+### 2. Criticality & Escalation Scoring (`components/criticality.py`)
+
+Uses `MoritzLaurer/deberta-v3-base-zeroshot-v2.0` (~184 MB) via the HuggingFace zero-shot classification pipeline to score each message as **low**, **medium**, or **high urgency**. The raw model score is adjusted by an emotion prior (e.g. "frustrated" shifts probability mass toward high), then filtered through layered guardrails: YAML keyword overrides, safety/medical/finance regex rules, and structural rules for contrast phrases ("works fine but the battery caught fire"). A decay-weighted conversation-level risk score aggregates per-turn results across the session, with a false-trigger penalty that prevents a single early escalation from holding the conversation at HIGH permanently. Every decision emits a structured reason code for the audit trail.
+
+### 3. Aspect-Based Sentiment Analysis (`components/absa.py`)
+
+Uses MiniLM sentence embeddings to identify which product or service aspect a complaint refers to (e.g. "shipping", "customer support", "product quality") and whether the user's opinion about that aspect is positive, negative, or neutral. Results are rolled up into manager-readable business aspect buckets and pushed to the dashboard as part of the session payload. The dashboard's manager overview aggregates ABSA data across all sessions to surface the most-mentioned negative issues.
+
+---
+
+## Plugging In a Real Order System
+
+By default the bot uses an in-memory mock with four sample orders. To connect a real backend:
+
+1. Set `ORDER_PROVIDER=rest` in your `.env`.
+2. Set `ORDER_API_BASE_URL` to your order API's base URL and `ORDER_API_KEY` if it requires a bearer token.
+
+The REST provider expects three endpoints:
+
+```
+GET  {base_url}/orders/{order_id}       → order object
+GET  {base_url}/orders?email={email}    → list or {"orders": [...]}
+PATCH {base_url}/orders/{order_id}      → body {"address": "..."}
+```
+
+Each order object must include: `status`, `eta`, `created_at`, `address`, `email`. See [`integrations/order_provider.py`](integrations/order_provider.py) for the full interface. To integrate a custom backend (Shopify, WooCommerce, SAP), subclass `OrderProvider` and register the new type string in `get_order_provider()`.
+
+---
+
+## License
+
+MIT License. Copyright (c) 2025 Ziad Jreij. See [LICENSE](LICENSE) for details.

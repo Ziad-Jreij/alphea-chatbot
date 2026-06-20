@@ -1205,17 +1205,20 @@ def extract_aspect_opinions(
         used_embedding_fallback = bool(aspect_mentions)
 
     # ── Still nothing → overall experience synthetic aspect ───────────────────
+    # Only fire when the message carries a clear opinion (non-neutral sentiment)
+    # AND contains an explicit opinion term — guards against questions, greetings,
+    # and informational messages being logged as ABSA data.
     if not aspect_mentions:
-        if global_sentiment is not None:
-            # Require meaningful text (>5 tokens) before creating synthetic aspect
-            if len(original_text.split()) >= 5:
+        if global_sentiment in ("positive", "negative"):
+            opinion_check = _find_opinion_mentions_exact(original_text)
+            if opinion_check and len(original_text.split()) >= 5:
                 return [{
                     "aspect":                      "overall experience",
                     "aspect_term":                 None,
                     "aspect_category":             "Overall_Experience",
                     "business_aspect":             "overall_experience",
                     "business_aspect_display":     BUSINESS_ASPECTS["overall_experience"],
-                    "opinion_term":                None,
+                    "opinion_term":                opinion_check[0].get("opinion_term"),
                     "aspect_sentiment":            global_sentiment,
                     "aspect_sentiment_confidence": 0.55,
                     "aspect_match_type":           "global_fallback",
