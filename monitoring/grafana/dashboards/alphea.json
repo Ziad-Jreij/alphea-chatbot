@@ -1,7 +1,7 @@
 {
   "id": null,
-  "uid": "vexa-overview",
-  "title": "Vexa — Customer Service Overview",
+  "uid": "alphea-overview",
+  "title": "Alphea — Customer Service Overview",
   "schemaVersion": 38,
   "version": 1,
   "refresh": "30s",
@@ -29,7 +29,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "vexa_sessions_total",
+          "expr": "alphea_sessions_total",
           "instant": true,
           "legendFormat": "Sessions"
         }
@@ -57,7 +57,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "vexa_sessions_red_alerts",
+          "expr": "alphea_sessions_red_alerts",
           "instant": true,
           "legendFormat": "Red Alerts"
         }
@@ -85,7 +85,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "vexa_sessions_escalated",
+          "expr": "alphea_sessions_escalated",
           "instant": true,
           "legendFormat": "Escalated"
         }
@@ -115,7 +115,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "100 * vexa_sessions_escalated / clamp_min(vexa_sessions_total, 1)",
+          "expr": "100 * alphea_sessions_escalated / clamp_min(alphea_sessions_total, 1)",
           "instant": true,
           "legendFormat": "Escalation %"
         }
@@ -137,7 +137,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (endpoint) (rate(vexa_requests_total[1m]))",
+          "expr": "sum by (endpoint) (rate(alphea_requests_total[1m]))",
           "legendFormat": "{{endpoint}}"
         }
       ]
@@ -158,17 +158,17 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(vexa_request_duration_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(alphea_request_duration_seconds_bucket[5m])))",
           "legendFormat": "p50"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(vexa_request_duration_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(alphea_request_duration_seconds_bucket[5m])))",
           "legendFormat": "p95"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(vexa_request_duration_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(alphea_request_duration_seconds_bucket[5m])))",
           "legendFormat": "p99"
         }
       ]
@@ -189,7 +189,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(vexa_requests_total{status=~\"4..|5..\"}[1m]))",
+          "expr": "sum(rate(alphea_requests_total{status=~\"4..|5..\"}[1m]))",
           "legendFormat": "Errors/s"
         }
       ]
@@ -209,17 +209,17 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "vexa_sessions_total",
+          "expr": "alphea_sessions_total",
           "legendFormat": "Total"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "vexa_sessions_red_alerts",
+          "expr": "alphea_sessions_red_alerts",
           "legendFormat": "Red Alerts"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "vexa_sessions_escalated",
+          "expr": "alphea_sessions_escalated",
           "legendFormat": "Escalated"
         }
       ]

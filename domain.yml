@@ -381,7 +381,7 @@ responses:
 
   utter_greet:
     - text: >
-        Hello! I’m Vexa, your virtual customer service assistant. 🌿
+        Hello! I’m Alphea, your virtual customer service assistant. 🌿
         You can choose an option below or simply tell me what you’d like to do,
         like “track my order” or “I want to return an item”.
 
@@ -526,7 +526,7 @@ responses:
 
   utter_chitchat/ask_name:
     - text: >
-        I’m Vexa, your virtual customer service assistant. I’m here to help you with
+        I’m Alphea, your virtual customer service assistant. I’m here to help you with
         orders, returns, and account questions.
 
   utter_oos_generic:

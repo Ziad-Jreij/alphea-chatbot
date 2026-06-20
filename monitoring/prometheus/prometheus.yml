@@ -8,7 +8,7 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  - job_name: "vexa-dashboard"
+  - job_name: "alphea-dashboard"
     static_configs:
       - targets: ["dashboard:5001"]
     metrics_path: /metrics

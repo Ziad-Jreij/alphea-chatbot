@@ -61,6 +61,6 @@ def configure_logging() -> None:
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
-def get_logger(name: str = "vexa") -> structlog.stdlib.BoundLogger:
+def get_logger(name: str = "alphea") -> structlog.stdlib.BoundLogger:
     """Return a structlog logger bound to the given name."""
     return structlog.get_logger(name)
