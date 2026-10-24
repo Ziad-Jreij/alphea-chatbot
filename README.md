@@ -4,6 +4,21 @@ Alphea is a production-ready e-commerce customer service chatbot built on Rasa 3
 
 ---
 
+## Why This Project Is Novel
+
+Most support bots stop at intent recognition or a single sentiment score. Alphea combines **emotion awareness, criticality assessment, escalation logic and aspect-level analysis** in real time to decide when a human agent should step in:
+
+- Fine-grained **emotion detection** (GoEmotions-based)
+- **Criticality scoring independent of emotion** — "I think someone stole my credit card" is emotionally neutral but high-criticality
+- Hybrid **rule-based and model-based escalation**, with a reason code for every decision
+- **Aspect-level sentiment** for products and services
+- A **real-time dashboard** for human agents
+- **Two automatically generated datasets** for analytics and business insight
+
+The result is a bot that doesn't just chat: it monitors conversation risk, protects users in high-criticality situations, and turns support conversations into product feedback.
+
+---
+
 ## Architecture
 
 ```
@@ -249,6 +264,18 @@ Uses `MoritzLaurer/deberta-v3-base-zeroshot-v2.0` (~184 MB) via the HuggingFace 
 ### 3. Aspect-Based Sentiment Analysis (`components/absa.py`)
 
 Uses MiniLM sentence embeddings to identify which product or service aspect a complaint refers to (e.g. "shipping", "customer support", "product quality") and whether the user's opinion about that aspect is positive, negative, or neutral. Results are rolled up into manager-readable business aspect buckets and pushed to the dashboard as part of the session payload. The dashboard's manager overview aggregates ABSA data across all sessions to surface the most-mentioned negative issues.
+
+---
+
+## Automatically Generated Datasets
+
+The action server appends to two CSV files in `./datasets/` (mounted into the `rasa-actions` container) as conversations happen.
+
+**`conversation_sessions.csv`** — one row per conversation: `Session_ID`, `Start_time`, `User_intent`, `Resolution_Status`, `Final_Sentiment`, `Top_Emotion`, `Emotion_Score`, `Criticality_Level`, `Criticality_Score`, `Conversation_Escalation`, `Criticality_Explanation`, `Handoff_to_agent`, `total_messages`, `conversation_duration`, `Conversation_Feedback`.
+Useful for: peak hours for high-risk conversations, escalation frequency and causes, emotion–risk correlation, satisfaction prediction.
+
+**`aspect_sentiment_sessions.csv`** — one row per detected aspect: `Session_ID`, `Original_Text`, `Aspect`, `Aspect_Term`, `Opinion_Term`, `Aspect_Sentiment`, `Confidence`, `Category`, `Business_Aspect`, `Business_Aspect_Display`, `Match_Type`, `Similarity`, `Emotion`, `Emotion_Score`.
+Useful for: most-complained-about aspects, aspect-level satisfaction, emotion trends by category, product improvement priorities.
 
 ---
 
