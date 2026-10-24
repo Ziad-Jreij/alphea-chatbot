@@ -1,5 +1,6 @@
 import os
 import csv
+import hmac
 import io
 import jwt
 import time
@@ -12,6 +13,9 @@ from collections import defaultdict, Counter
 
 from flask import Flask, request, jsonify, Response, g
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from werkzeug.middleware.proxy_fix import ProxyFix
 from sqlalchemy import create_engine, Column, String, DateTime, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
@@ -40,12 +44,40 @@ if _PROMETHEUS:
     _SESS_ESC    = Gauge("alphea_sessions_escalated",  "Escalated sessions")
 
 # ── Config ────────────────────────────────────────────────────────────────────
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://chatbot:chatbot@localhost:5432/chatbot")
-JWT_SECRET   = os.environ.get("JWT_SECRET_KEY", "dev-secret-change-in-prod")
-ADMIN_USER   = os.environ.get("DASHBOARD_USERNAME", "admin")
-ADMIN_PASS   = os.environ.get("DASHBOARD_PASSWORD", "admin")
-CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*").split(",")
-PORT         = int(os.environ.get("DASHBOARD_PORT", "5001"))
+DATABASE_URL  = os.environ.get("DATABASE_URL", "postgresql://chatbot:chatbot@localhost:5432/chatbot")
+JWT_SECRET    = os.environ.get("JWT_SECRET_KEY", "")
+ADMIN_USER    = os.environ.get("DASHBOARD_USERNAME", "admin")
+ADMIN_PASS    = os.environ.get("DASHBOARD_PASSWORD", "")
+INGEST_TOKEN  = os.environ.get("DASHBOARD_INGEST_TOKEN", "")
+CORS_ORIGINS  = os.environ.get("CORS_ORIGINS", "*").split(",")
+PORT          = int(os.environ.get("DASHBOARD_PORT", "5001"))
+# Number of reverse proxies in front of the app whose X-Forwarded-For we trust.
+# 0 (default) = use the socket peer address; never trust client-supplied headers.
+TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", "0"))
+RATELIMIT_STORAGE   = os.environ.get("RATELIMIT_STORAGE_URI", "memory://")
+
+# ── Refuse to start with missing or placeholder secrets ───────────────────────
+_PLACEHOLDER_SECRETS = {
+    "", "admin", "changeme", "password", "chatbot",
+    "dev-secret-change-in-prod",
+    "change-me-to-a-long-random-string-in-production",
+}
+
+def _check_secrets() -> None:
+    problems = []
+    if JWT_SECRET in _PLACEHOLDER_SECRETS or len(JWT_SECRET) < 32:
+        problems.append("JWT_SECRET_KEY must be a random string of at least 32 characters")
+    if ADMIN_PASS in _PLACEHOLDER_SECRETS or len(ADMIN_PASS) < 12:
+        problems.append("DASHBOARD_PASSWORD must be set to a non-default value of at least 12 characters")
+    if INGEST_TOKEN in _PLACEHOLDER_SECRETS or len(INGEST_TOKEN) < 32:
+        problems.append("DASHBOARD_INGEST_TOKEN must be a random string of at least 32 characters")
+    if problems:
+        raise RuntimeError(
+            "Insecure dashboard configuration:\n  - " + "\n  - ".join(problems)
+            + "\nGenerate values with: openssl rand -hex 32"
+        )
+
+_check_secrets()
 
 # ── Database ──────────────────────────────────────────────────────────────────
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
@@ -81,6 +113,8 @@ def get_db():
 
 # ── Flask ──────────────────────────────────────────────────────────────────────
 app = Flask(__name__)
+if TRUSTED_PROXY_COUNT > 0:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=TRUSTED_PROXY_COUNT)
 CORS(app, origins=CORS_ORIGINS, allow_headers=["Authorization", "Content-Type"])
 
 @app.before_request
@@ -95,43 +129,21 @@ def _record_metrics(response):
         _REQ_LATENCY.labels(endpoint=endpoint).observe(time.monotonic() - g.t0)
     return response
 
-# ── Rate limiting (in-memory, per IP) ────────────────────────────────────────
-_rate_buckets: dict = defaultdict(list)
-_last_bucket_sweep: float = 0.0
-_SWEEP_INTERVAL = 300  # prune stale IPs every 5 minutes
+# ── Rate limiting (per client IP) ─────────────────────────────────────────────
+# Use a shared store (RATELIMIT_STORAGE_URI=redis://...) so limits hold across
+# gunicorn workers; memory:// is per-process and only suitable for development.
+# The client IP comes from request.remote_addr, which ProxyFix rewrites only
+# when TRUSTED_PROXY_COUNT > 0.
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    storage_uri=RATELIMIT_STORAGE,
+    strategy="moving-window",
+)
 
-def _is_rate_limited(key: str, max_calls: int, window_secs: int) -> bool:
-    global _last_bucket_sweep
-    now = time.monotonic()
-
-    # Periodic global sweep to prevent unbounded dict growth
-    if now - _last_bucket_sweep > _SWEEP_INTERVAL:
-        stale = [k for k, ts in list(_rate_buckets.items()) if not ts or now - max(ts) > window_secs * 2]
-        for k in stale:
-            del _rate_buckets[k]
-        _last_bucket_sweep = now
-
-    calls = [t for t in _rate_buckets[key] if now - t < window_secs]
-    _rate_buckets[key] = calls
-    if len(calls) >= max_calls:
-        return True
-    _rate_buckets[key].append(now)
-    return False
-
-def rate_limit(max_calls: int = 60, window_secs: int = 60):
-    def decorator(f):
-        @wraps(f)
-        def decorated(*args, **kwargs):
-            ip = (
-                request.headers.get("X-Forwarded-For", request.remote_addr or "unknown")
-                .split(",")[0]
-                .strip()
-            )
-            if _is_rate_limited(f"{f.__name__}:{ip}", max_calls, window_secs):
-                return jsonify({"error": "too many requests"}), 429
-            return f(*args, **kwargs)
-        return decorated
-    return decorator
+@app.errorhandler(429)
+def _too_many_requests(_exc):
+    return jsonify({"error": "too many requests"}), 429
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 def _issue_token() -> str:
@@ -145,7 +157,7 @@ def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         auth  = request.headers.get("Authorization", "")
-        token = auth[7:] if auth.startswith("Bearer ") else request.args.get("token", "")
+        token = auth[7:] if auth.startswith("Bearer ") else ""
         if not token:
             return jsonify({"error": "missing token"}), 401
         try:
@@ -196,11 +208,19 @@ def metrics():
     return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
 
 
+def _safe_equals(supplied, expected: str) -> bool:
+    if not isinstance(supplied, str):
+        return False
+    return hmac.compare_digest(supplied.encode("utf-8"), expected.encode("utf-8"))
+
 @app.route("/api/auth/login", methods=["POST"])
-@rate_limit(max_calls=5, window_secs=60)
+@limiter.limit("5 per minute")
 def login():
     data = request.get_json(force=True) or {}
-    if data.get("username") == ADMIN_USER and data.get("password") == ADMIN_PASS:
+    # Evaluate both comparisons so timing doesn't reveal which field was wrong.
+    user_ok = _safe_equals(data.get("username"), ADMIN_USER)
+    pass_ok = _safe_equals(data.get("password"), ADMIN_PASS)
+    if user_ok and pass_ok:
         log.info("login_success", user=ADMIN_USER)
         return jsonify({"access_token": _issue_token(), "token_type": "bearer"})
     log.warning("login_failed", user=data.get("username"))
@@ -236,9 +256,18 @@ def _rec_to_dict(rec: ChatSession) -> dict:
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.route("/api/update_session", methods=["POST"])
-@rate_limit(max_calls=300, window_secs=60)
+@limiter.exempt
 def update_session():
-    """Called by the Rasa action server (server-to-server, no JWT needed)."""
+    """Called by the Rasa action server (server-to-server).
+
+    Authenticated with the shared DASHBOARD_INGEST_TOKEN instead of a JWT. Not
+    rate-limited: every chat turn from every user arrives from the single
+    action-server IP, so a per-IP limit would throttle the bot under load.
+    """
+    if not _safe_equals(request.headers.get("X-Ingest-Token"), INGEST_TOKEN):
+        log.warning("ingest_rejected", remote_addr=request.remote_addr)
+        return jsonify({"error": "invalid ingest token"}), 401
+
     data = request.get_json(force=True) or {}
     session_id = data.get("session_id")
     if not session_id:
@@ -278,7 +307,7 @@ def update_session():
 
 @app.route("/api/sessions", methods=["GET"])
 @require_auth
-@rate_limit(max_calls=120, window_secs=60)
+@limiter.limit("120 per minute")
 def list_sessions():
     with get_db() as db:
         records = db.query(ChatSession).order_by(ChatSession.updated_at.desc().nullslast()).all()
@@ -308,7 +337,7 @@ def list_sessions():
 
 @app.route("/api/sessions/<session_id>", methods=["GET"])
 @require_auth
-@rate_limit(max_calls=120, window_secs=60)
+@limiter.limit("120 per minute")
 def get_session(session_id):
     with get_db() as db:
         rec = db.query(ChatSession).filter_by(session_id=session_id).first()
@@ -321,7 +350,7 @@ def get_session(session_id):
 
 @app.route("/api/sessions/<session_id>/resolve", methods=["POST"])
 @require_auth
-@rate_limit(max_calls=60, window_secs=60)
+@limiter.limit("60 per minute")
 def resolve_session(session_id):
     with get_db() as db:
         rec = db.query(ChatSession).filter_by(session_id=session_id).first()
@@ -345,7 +374,7 @@ def resolve_session(session_id):
 
 @app.route("/api/stats", methods=["GET"])
 @require_auth
-@rate_limit(max_calls=60, window_secs=60)
+@limiter.limit("60 per minute")
 def stats():
     with get_db() as db:
         records = db.query(ChatSession).all()
@@ -360,7 +389,7 @@ def stats():
 
 @app.route("/api/manager/overview", methods=["GET"])
 @require_auth
-@rate_limit(max_calls=60, window_secs=60)
+@limiter.limit("60 per minute")
 def manager_overview():
     with get_db() as db:
         sessions = [r.data for r in db.query(ChatSession).all()]
@@ -454,7 +483,7 @@ def manager_overview():
 
 @app.route("/api/manager/export.csv", methods=["GET"])
 @require_auth
-@rate_limit(max_calls=10, window_secs=60)
+@limiter.limit("10 per minute")
 def export_csv():
     fieldnames = [
         "session_id", "lifecycle", "status",

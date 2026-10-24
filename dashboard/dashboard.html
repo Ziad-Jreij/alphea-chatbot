@@ -1336,11 +1336,17 @@
         <div class="manager-row cols-2">${lifecyclePanel}${sparkPanel}</div>`;
     }
 
-    function downloadCSV() {
+    // Fetch with the Authorization header (never put the JWT in the URL — it
+    // would end up in server access logs and browser history).
+    async function downloadCSV() {
+      const res = await _authFetch(`${API_BASE}/api/manager/export.csv`);
+      if (!res.ok) return;
+      const url = URL.createObjectURL(await res.blob());
       const a = document.createElement("a");
-      a.href = `${API_BASE}/api/manager/export.csv?token=${encodeURIComponent(_token())}`;
+      a.href = url;
       a.download = "sessions_export.csv";
       a.click();
+      URL.revokeObjectURL(url);
     }
 
     document.querySelectorAll(".tab-btn").forEach(btn => {

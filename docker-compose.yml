@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
 
   # ── PostgreSQL ──────────────────────────────────────────────────────────────
@@ -11,11 +9,21 @@ services:
       POSTGRES_USER:     ${DB_USER:-chatbot}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-chatbot}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-chatbot} -d ${DB_NAME:-chatbot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (shared rate-limit store for the dashboard) ───────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -31,8 +39,11 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://${DB_USER:-chatbot}:${DB_PASSWORD:-chatbot}@postgres:5432/${DB_NAME:-chatbot}
+      RATELIMIT_STORAGE_URI: redis://redis:6379/0
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health')"]
@@ -46,9 +57,12 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.actions
+      args:
+        # CPU wheels by default. For GPU: https://download.pytorch.org/whl/cu128
+        TORCH_INDEX: ${TORCH_INDEX:-https://download.pytorch.org/whl/cpu}
     restart: unless-stopped
     ports:
-      - "5055:5055"
+      - "127.0.0.1:5055:5055"
     env_file: .env
     environment:
       DASHBOARD_BACKEND_URL: http://dashboard:5001
@@ -78,7 +92,12 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      # Models are preloaded before the server listens. The first start
+      # downloads ~700 MB into hf_cache (23 min measured on a ~0.5 MB/s link),
+      # so allow a long grace period. The container turns healthy as soon as
+      # it is ready; cached restarts take ~25 s.
+      start_period: 60m
+      start_interval: 5s
 
   # ── Rasa Dialog Server ──────────────────────────────────────────────────────
   rasa:
@@ -96,6 +115,17 @@ services:
       DB_USER:     ${DB_USER:-chatbot}
       DB_PASSWORD: ${DB_PASSWORD:-chatbot}
       RASA_ACTION_ENDPOINT: http://rasa-actions:5055/webhook
+    # The HTTP API (/conversations, /model, ...) requires ?token=RASA_AUTH_TOKEN.
+    # Chat channels (socket.io, /webhooks/rest) are unaffected by the token.
+    command:
+      - run
+      - --enable-api
+      - --auth-token
+      - ${RASA_AUTH_TOKEN:?RASA_AUTH_TOKEN must be set in .env (openssl rand -hex 32)}
+      - --cors
+      - ${RASA_CORS_ORIGINS:-*}
+      - --port
+      - "5005"
     depends_on:
       postgres:
         condition: service_healthy
@@ -105,6 +135,7 @@ services:
         condition: service_healthy
     volumes:
       - ./models:/app/models
+      - rasa_hf_cache:/app/.cache/huggingface
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5005/version')"]
       interval: 15s
@@ -117,7 +148,7 @@ services:
     image: prom/prometheus:v2.51.0
     restart: unless-stopped
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -132,7 +163,7 @@ services:
     image: grafana/grafana:10.4.0
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       GF_SECURITY_ADMIN_USER:     ${GRAFANA_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
@@ -147,5 +178,6 @@ services:
 volumes:
   postgres_data:
   hf_cache:
+  rasa_hf_cache:
   prometheus_data:
   grafana_data:

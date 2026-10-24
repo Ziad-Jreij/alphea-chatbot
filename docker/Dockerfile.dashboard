@@ -10,7 +10,8 @@ RUN pip install --no-cache-dir \
     PyJWT==2.10.* \
     structlog==23.* \
     prometheus-client==0.20.* \
-    gunicorn==21.*
+    gunicorn==21.* \
+    "flask-limiter[redis]==3.*"
 
 COPY dashboard/app.py ./app.py
 COPY dashboard/dashboard.html dashboard/login.html ./

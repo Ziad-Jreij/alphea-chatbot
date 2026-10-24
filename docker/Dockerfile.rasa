@@ -9,10 +9,19 @@ WORKDIR /app
 
 COPY config.yml domain.yml credentials.yml endpoints.yml ./
 COPY data/   ./data/
-COPY models/ ./models/
+# models/ is not copied: it is gitignored (absent on a fresh clone) and is
+# bind-mounted from the host by docker-compose instead.
+# .cache/huggingface is a named volume so the BERT weights used by
+# LanguageModelFeaturizer are downloaded once, not on every start. Both are
+# group-0 writable so `rasa train --user "$(id -u):0"` can write them too.
+RUN mkdir -p /app/models /app/.cache/huggingface \
+    && chown -R 1001:0 /app/models /app/.cache \
+    && chmod -R g+rwX /app/models /app/.cache
 
 USER 1001
 
 EXPOSE 5005
 
-CMD ["run", "--enable-api", "--cors", "*", "--port", "5005"]
+# Safe default without the HTTP API. docker-compose.yml overrides this with
+# --enable-api protected by RASA_AUTH_TOKEN.
+CMD ["run", "--port", "5005"]

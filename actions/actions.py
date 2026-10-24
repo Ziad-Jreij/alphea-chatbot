@@ -21,6 +21,7 @@ from observability.logging_config import configure_logging, get_logger
 configure_logging()
 _init_lock = Lock()
 DASHBOARD_BACKEND_URL = os.environ.get("DASHBOARD_BACKEND_URL", "http://localhost:5001")
+DASHBOARD_INGEST_TOKEN = os.environ.get("DASHBOARD_INGEST_TOKEN", "")
 
 logger = get_logger(__name__)
 
@@ -1992,12 +1993,30 @@ class ActionPushStateToDashboard(Action):
         }
 
         try:
-            requests.post(
+            resp = requests.post(
                 f"{DASHBOARD_BACKEND_URL}/api/update_session",
                 json=payload,
+                headers={"X-Ingest-Token": DASHBOARD_INGEST_TOKEN},
                 timeout=1,
             )
+            if not resp.ok:
+                logger.error("dashboard_push_rejected", session_id=payload.get("session_id"),
+                             status=resp.status_code)
         except Exception as e:
             logger.error("dashboard_push_failed", session_id=payload.get("session_id"), error=str(e))
 
         return []
+
+# ── Model preload ────────────────────────────────────────────────────────────
+# rasa_sdk imports this module before it opens port 5055, so loading here keeps
+# the health check failing until the models are ready. Without it, the first
+# user message after a fresh deploy triggers a ~700 MB download and times out.
+if os.environ.get("PRELOAD_MODELS", "true").lower() == "true":
+    from components.criticality import ensure_crit_pipe
+    from components.absa import _ensure_emb_model
+
+    logger.info("model_preload_started")
+    ensure_emotion_pipe()
+    ensure_crit_pipe()
+    _ensure_emb_model()
+    logger.info("model_preload_finished")

@@ -24,16 +24,11 @@ pipeline:
     threshold: 0.6
     ambiguity_threshold: 0.1
 
-  - name: components.emotion.EmotionClassifierComponent
-
-  - name: components.criticality.CriticalityZeroShotComponent
-    model_name: "MoritzLaurer/deberta-v3-base-zeroshot-v2.0"
-    hypothesis_template: "This support request is {}."
-    labels: ["low urgency", "medium urgency", "high urgency"]
-    boost_from_emotion: true
-    heuristics_enabled: true
-    gpu: false     
-    cache: true    
+  # Emotion, criticality and ABSA are NOT part of the NLU pipeline: they run in
+  # the action server (see _infer_emotion_slots in actions/actions.py), which is
+  # the only container with torch and the model weights. Adding the components
+  # here would score every message twice. Model choice is set via env vars
+  # (CRITICALITY_MODEL, GPU_ENABLED) on the rasa-actions service.
 
 policies:
   - name: RulePolicy

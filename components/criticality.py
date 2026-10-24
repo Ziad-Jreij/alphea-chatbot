@@ -401,7 +401,7 @@ def _apply_structural_rules(
 # This means ANY escalation decision can be explained in < 30 seconds.
 # ---------------------------------------------------------------------------
 
-_CRIT_MODEL_NAME = "MoritzLaurer/deberta-v3-base-zeroshot-v2.0"
+_CRIT_MODEL_NAME = os.environ.get("CRITICALITY_MODEL", "MoritzLaurer/deberta-v3-base-zeroshot-v2.0")
 _CRIT_LABELS = ["low urgency", "medium urgency", "high urgency"]
 _CRIT_HYPOTHESIS = "This support request is {}."
 

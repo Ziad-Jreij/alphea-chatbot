@@ -7,8 +7,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install CPU-only torch first to keep the image smaller
-RUN pip install --no-cache-dir torch==2.* --index-url https://download.pytorch.org/whl/cpu
+# Install CPU-only torch first to keep the image smaller. PyPI stays available
+# as an extra index for torch's own dependencies, which the PyTorch index does
+# not fully mirror. 2.7.1 is pinned because it is the first release with
+# CUDA 12.8 wheels (needed for RTX 50-series) if TORCH_INDEX is switched to cu128.
+ARG TORCH_INDEX=https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir torch==2.7.1 \
+    --index-url ${TORCH_INDEX} --extra-index-url https://pypi.org/simple
 
 RUN pip install --no-cache-dir \
     rasa-sdk==3.6.* \

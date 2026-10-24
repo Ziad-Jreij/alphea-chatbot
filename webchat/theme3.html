@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Nexus – Customer Support Portal (Demo)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    :root {
+      --bg:           #f3f6f5;
+      --header-bg:    #0a2e2b;
+      --primary:      #0f766e;
+      --primary-hov:  #0d6b63;
+      --accent:       #14b8a6;
+      --accent-light: #ccfbf1;
+      --accent-faint: #f0fdfa;
+      --text:         #111827;
+      --muted:        #6b7280;
+      --light:        #9ca3af;
+      --card:         #ffffff;
+      --border:       #e2e8f0;
+      --border-teal:  rgba(20,184,166,.18);
+      --shadow:       0 4px 18px rgba(15,118,110,.07);
+    }
+
+    html, body { height: 100%; margin: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    a { text-decoration: none; color: inherit; }
+
+    /* ── Top announcement bar ── */
+    .topbar {
+      background: linear-gradient(90deg, #0f766e 0%, #0d9488 100%);
+      color: #ccfbf1;
+      padding: 7px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      gap: 12px;
+    }
+    .topbar-left  { display: flex; align-items: center; gap: 14px; }
+    .topbar-right { display: flex; align-items: center; gap: 14px; opacity: .85; }
+    .topbar-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.15);
+      border: 1px solid rgba(255,255,255,.25);
+      font-weight: 700;
+      color: white;
+      font-size: 11px;
+      letter-spacing: .02em;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--header-bg);
+      color: white;
+      padding: 13px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      border-bottom: 1px solid rgba(20,184,166,.12);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      min-width: 210px;
+    }
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #2dd4bf, #0f766e);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 15px;
+      color: white;
+      letter-spacing: -.01em;
+      flex-shrink: 0;
+    }
+    .brand-name strong { display: block; font-size: 15px; font-weight: 700; }
+    .brand-name small  { color: #6ee7b7; font-size: 11px; }
+
+    header nav {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+      flex: 1;
+    }
+    header nav a {
+      color: #cbd5e1;
+      padding: 7px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 500;
+      border: 1px solid transparent;
+    }
+    header nav a:hover {
+      background: rgba(20,184,166,.1);
+      border-color: rgba(20,184,166,.2);
+      color: #5eead4;
+    }
+    header nav a.active {
+      background: rgba(20,184,166,.14);
+      border-color: rgba(20,184,166,.3);
+      color: #2dd4bf;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 270px;
+      justify-content: flex-end;
+    }
+    .search {
+      position: relative;
+      width: 196px;
+    }
+    .search input {
+      width: 100%;
+      padding: 8px 30px 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,.25);
+      background: rgba(255,255,255,.06);
+      color: #f8fafc;
+      outline: none;
+      font-size: 13px;
+    }
+    .search input::placeholder { color: #64748b; }
+    .search .search-ic {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #64748b;
+      font-size: 12px;
+      pointer-events: none;
+    }
+
+    .btn {
+      border: none;
+      cursor: pointer;
+      border-radius: 999px;
+      padding: 8px 15px;
+      font-size: 13px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: var(--primary); }
+    .btn-ghost {
+      background: rgba(255,255,255,.07);
+      color: #cbd5e1;
+      border: 1px solid rgba(148,163,184,.22);
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,.12); }
+
+    .h-avatar {
+      width: 34px; height: 34px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--primary));
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 12px;
+      color: white;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* ── Layout ── */
+    main {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 18px 20px 36px;
+      display: grid;
+      grid-template-columns: 258px 1fr 318px;
+      gap: 16px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card);
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .card-hd {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-hd strong { font-size: 13px; font-weight: 700; }
+    .card-hd .sub  { color: var(--muted); font-size: 12px; }
+    .card-bd { padding: 14px 16px; }
+
+    /* ── Sidebar ── */
+    .profile-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .s-avatar {
+      width: 44px; height: 44px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--primary));
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 14px;
+      color: white;
+      flex-shrink: 0;
+    }
+    .user-name strong { display: block; font-size: 14px; }
+    .user-name small  { color: var(--muted); font-size: 12px; }
+
+    .sbadge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .sbadge.green { background: #dcfce7; color: #15803d; border: 1px solid rgba(21,128,61,.22); }
+    .sbadge.teal  { background: var(--accent-faint); color: var(--primary); border: 1px solid rgba(15,118,110,.22); }
+
+    .side-nav { display: grid; gap: 5px; margin-top: 12px; }
+    .side-nav a {
+      padding: 9px 10px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: var(--text);
+      background: var(--bg);
+    }
+    .side-nav a:hover {
+      background: var(--accent-faint);
+      border-color: var(--border-teal);
+    }
+    .side-nav a.sel {
+      background: var(--accent-light);
+      border-color: rgba(20,184,166,.3);
+      color: var(--primary);
+      font-weight: 600;
+    }
+    .s-tag {
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-weight: 700;
+      background: var(--accent-faint);
+      color: var(--primary);
+      border: 1px solid rgba(15,118,110,.18);
+    }
+    .s-tag.red { background: #fef2f2; color: #b91c1c; border-color: rgba(185,28,28,.18); }
+
+    /* ── Hero ── */
+    .hero {
+      background: linear-gradient(135deg, #082622 0%, #0f766e 100%);
+      border-radius: 14px;
+      padding: 22px 22px 20px;
+      color: white;
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 16px;
+      border: 1px solid rgba(20,184,166,.2);
+    }
+    .hero h1 {
+      margin: 0 0 7px;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: .01em;
+    }
+    .hero p {
+      margin: 0;
+      color: #99f6e4;
+      font-size: 13px;
+      line-height: 1.55;
+      max-width: 72%;
+    }
+    .hero-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 14px;
+    }
+    .hero-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.1);
+      border: 1px solid rgba(255,255,255,.18);
+      font-size: 12px;
+      color: #ccfbf1;
+      font-weight: 500;
+    }
+    .hero-tip {
+      margin-top: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 14px;
+      border-radius: 999px;
+      background: rgba(20,184,166,.18);
+      border: 1px solid rgba(20,184,166,.32);
+      color: #5eead4;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .hero-wm {
+      position: absolute;
+      right: -10px;
+      bottom: -20px;
+      font-size: 120px;
+      opacity: .06;
+      user-select: none;
+    }
+
+    /* ── Topics grid ── */
+    .topics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .topic {
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(15,118,110,.04);
+    }
+    .topic:hover {
+      border-color: rgba(20,184,166,.4);
+      box-shadow: 0 4px 16px rgba(15,118,110,.1);
+    }
+    .topic-ic { font-size: 22px; margin-bottom: 7px; }
+    .topic strong { display: block; font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+    .topic p { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+    /* ── Table ── */
+    .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .tbl th, .tbl td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: middle;
+    }
+    .tbl th {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      background: #fafafa;
+    }
+    .tbl td:first-child, .tbl th:first-child { padding-left: 16px; }
+
+    .ts {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .ts.open     { background: #eff6ff; color: #1d4ed8; border: 1px solid rgba(29,78,216,.2); }
+    .ts.resolved { background: #f0fdf4; color: #15803d; border: 1px solid rgba(21,128,61,.2); }
+    .ts.escalated{ background: #fff7ed; color: #c2410c; border: 1px solid rgba(194,65,12,.2); }
+
+    .pri { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; }
+    .pri.high   { color: #dc2626; }
+    .pri.med    { color: #d97706; }
+    .pri.low    { color: #16a34a; }
+
+    /* ── Right panel: Alphea card ── */
+    .alphea-card {
+      background: linear-gradient(160deg, #082622 0%, #134e4a 100%);
+      border: 1px solid rgba(20,184,166,.25);
+      color: white;
+    }
+    .alphea-card .card-hd {
+      background: transparent;
+      border-bottom: 1px solid rgba(20,184,166,.2);
+    }
+    .alphea-card .card-hd strong { color: white; }
+    .alphea-card .card-hd .sub  { color: #5eead4; }
+
+    .online-dot {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 14px;
+      font-size: 12px;
+      color: #34d399;
+      font-weight: 600;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 999px;
+      background: #34d399;
+      animation: blink 1.8s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+    .ai-feat {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px;
+      border-radius: 10px;
+      background: rgba(20,184,166,.08);
+      border: 1px solid rgba(20,184,166,.15);
+      margin-bottom: 8px;
+    }
+    .ai-ic {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: rgba(20,184,166,.15);
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .ai-txt strong { display: block; font-size: 13px; color: #ccfbf1; margin-bottom: 2px; }
+    .ai-txt small  { font-size: 12px; color: #6ee7b7; line-height: 1.4; }
+
+    .demo-prompts { display: grid; gap: 7px; margin-top: 13px; }
+    .dp {
+      padding: 9px 12px;
+      border-radius: 10px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(20,184,166,.15);
+      font-size: 12px;
+      color: #a7f3d0;
+    }
+    .dp code {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      color: #5eead4;
+    }
+
+    /* ── Announcements ── */
+    .ann {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      display: grid;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .ann:last-child { margin-bottom: 0; }
+    .ann strong { font-size: 13px; }
+    .ann small  { color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .ann-meta   { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; }
+    .a-chip {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 700;
+      background: var(--accent-faint);
+      color: var(--primary);
+      border: 1px solid rgba(15,118,110,.2);
+    }
+    .a-chip.warn { background: #fff7ed; color: #c2410c; border-color: rgba(194,65,12,.2); }
+    .a-chip.blue { background: #eff6ff; color: #1d4ed8; border-color: rgba(29,78,216,.2); }
+
+    /* ── Footer ── */
+    footer {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 12px 20px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+      color: var(--light);
+      font-size: 12px;
+    }
+
+    /* ── Chatbot ── */
+    #webchat { position: fixed; bottom: 0; right: 0; z-index: 9999; }
+
+    /* ── Responsive ── */
+    @media (max-width: 1100px) {
+      main { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-badge">⚡ Demo Mode</span>
+      <span>Nexus Platform · Customer Support Portal</span>
+      <span>Help: +1 (800) 639-8700</span>
+    </div>
+    <div class="topbar-right">
+      <span>🌐 English</span>
+      <span>|</span>
+      <span>No real data is stored or transmitted in this demo</span>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">NX</div>
+      <div class="brand-name">
+        <strong>Nexus</strong>
+        <small>Support Center · Demo</small>
+      </div>
+    </div>
+
+    <nav>
+      <a href="#overview" class="active">Dashboard</a>
+      <a href="#tickets">My Tickets</a>
+      <a href="#account">Account</a>
+      <a href="#billing">Billing</a>
+      <a href="#integrations">Integrations</a>
+      <a href="#support">Support</a>
+    </nav>
+
+    <div class="header-actions">
+      <div class="search">
+        <input type="text" placeholder="Search articles, tickets…" />
+        <div class="search-ic">🔎</div>
+      </div>
+      <button class="btn btn-ghost" type="button">🔔</button>
+      <button class="btn btn-primary" type="button">Open a ticket</button>
+      <div class="h-avatar">JD</div>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── Left Sidebar ── -->
+    <aside class="card" aria-label="Sidebar">
+      <div class="card-hd">
+        <strong>My account</strong>
+        <span class="sub">Pro plan</span>
+      </div>
+      <div class="card-bd">
+        <div class="profile-top">
+          <div class="s-avatar">JD</div>
+          <div class="user-name">
+            <strong>John Demo</strong>
+            <small>john@nexus-demo.io</small>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <span class="sbadge green">✅ Active subscription</span>
+          <span class="sbadge teal">Pro plan</span>
+        </div>
+
+        <nav class="side-nav">
+          <a href="#overview" class="sel">
+            <span>🏠 Overview</span>
+            <span class="s-tag">Home</span>
+          </a>
+          <a href="#tickets">
+            <span>🎫 My tickets</span>
+            <span class="s-tag red">3 open</span>
+          </a>
+          <a href="#account">
+            <span>👤 Account settings</span>
+            <span class="s-tag">Edit</span>
+          </a>
+          <a href="#billing">
+            <span>💳 Billing & invoices</span>
+            <span class="s-tag">View</span>
+          </a>
+          <a href="#integrations">
+            <span>🔗 Integrations</span>
+            <span class="s-tag">12 apps</span>
+          </a>
+          <a href="#support">
+            <span>💬 AI support chat</span>
+            <span class="s-tag">Online</span>
+          </a>
+        </nav>
+      </div>
+    </aside>
+
+    <!-- ── Center ── -->
+    <section aria-label="Main content">
+
+      <!-- Hero -->
+      <div class="hero" id="overview">
+        <h1>AI-Powered Customer Support, Built for Nexus.</h1>
+        <p>
+          This demo showcases <strong style="color:#5eead4">Alphea</strong>, an advanced customer service chatbot that
+          detects emotion in real time, scores message criticality, and escalates high-stakes cases to a live agent —
+          automatically. Click the chat button to try it.
+        </p>
+        <div class="hero-chips">
+          <span class="hero-chip">🧠 Emotion detection</span>
+          <span class="hero-chip">🚨 Criticality scoring</span>
+          <span class="hero-chip">👤 Human escalation</span>
+          <span class="hero-chip">⚡ DeBERTa NLP</span>
+        </div>
+        <div class="hero-tip">
+          💡 Try: "I've been waiting 3 weeks and I'm completely losing patience."
+        </div>
+        <div class="hero-wm">🤖</div>
+      </div>
+
+      <!-- Support Topics -->
+      <div class="card" style="margin-bottom:16px;" id="support">
+        <div class="card-hd">
+          <strong>Support topics</strong>
+          <span class="sub">Ask Alphea about any of these</span>
+        </div>
+        <div class="card-bd">
+          <div class="topics">
+            <div class="topic">
+              <div class="topic-ic">💳</div>
+              <strong>Billing & payments</strong>
+              <p>Invoice disputes, failed charges, plan upgrades and refund requests.</p>
+            </div>
+            <div class="topic">
+              <div class="topic-ic">🔐</div>
+              <strong>Account access</strong>
+              <p>Password resets, two-factor auth issues, locked accounts and permissions.</p>
+            </div>
+            <div class="topic">
+              <div class="topic-ic">🔗</div>
+              <strong>Integrations</strong>
+              <p>Broken webhooks, API errors, OAuth failures and third-party sync problems.</p>
+            </div>
+            <div class="topic">
+              <div class="topic-ic">⚠️</div>
+              <strong>Incidents & outages</strong>
+              <p>Unexpected downtime, data sync delays and performance degradation.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tickets Table -->
+      <div class="card" id="tickets">
+        <div class="card-hd">
+          <strong>My open tickets</strong>
+          <span class="sub">Demo data · 3 open</span>
+        </div>
+        <div style="overflow:auto;">
+          <table class="tbl" aria-label="Support tickets">
+            <thead>
+              <tr>
+                <th>Ticket</th>
+                <th>Subject</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>#7821</td>
+                <td>Webhook not firing on order events</td>
+                <td><span class="pri high">● High</span></td>
+                <td><span class="ts escalated">🚨 Escalated</span></td>
+                <td>Today, 09:14</td>
+              </tr>
+              <tr>
+                <td>#7804</td>
+                <td>Invoice shows wrong VAT amount</td>
+                <td><span class="pri med">● Medium</span></td>
+                <td><span class="ts open">⏳ In review</span></td>
+                <td>Yesterday, 16:30</td>
+              </tr>
+              <tr>
+                <td>#7798</td>
+                <td>Can't add team member to workspace</td>
+                <td><span class="pri low">● Low</span></td>
+                <td><span class="ts open">⏳ Open</span></td>
+                <td>Dec 18, 11:05</td>
+              </tr>
+              <tr>
+                <td>#7765</td>
+                <td>Stripe sync delayed by over 2 hours</td>
+                <td><span class="pri high">● High</span></td>
+                <td><span class="ts resolved">✅ Resolved</span></td>
+                <td>Dec 15, 08:42</td>
+              </tr>
+              <tr>
+                <td>#7744</td>
+                <td>2FA recovery code not working</td>
+                <td><span class="pri med">● Medium</span></td>
+                <td><span class="ts resolved">✅ Resolved</span></td>
+                <td>Dec 12, 14:20</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Right Panel ── -->
+    <aside aria-label="Right panel" style="display:grid;gap:16px;align-content:start;">
+
+      <!-- Alphea panel -->
+      <section class="card alphea-card">
+        <div class="card-hd">
+          <strong>Alphea 🤖</strong>
+          <span class="sub">AI Support Agent</span>
+        </div>
+        <div class="card-bd">
+          <div class="online-dot">
+            <div class="dot"></div>
+            Online · Ready to assist
+          </div>
+
+          <div class="ai-feat">
+            <div class="ai-ic">😊</div>
+            <div class="ai-txt">
+              <strong>Emotion detection</strong>
+              <small>Identifies frustration, urgency, distress and satisfaction from text in real time.</small>
+            </div>
+          </div>
+          <div class="ai-feat">
+            <div class="ai-ic">🚨</div>
+            <div class="ai-txt">
+              <strong>Criticality scoring</strong>
+              <small>Flags high-stakes messages — fraud, data loss, outages — automatically.</small>
+            </div>
+          </div>
+          <div class="ai-feat">
+            <div class="ai-ic">👤</div>
+            <div class="ai-txt">
+              <strong>Human escalation</strong>
+              <small>Routes critical or emotionally charged cases to a live agent without manual triage.</small>
+            </div>
+          </div>
+
+          <div class="demo-prompts">
+            <div class="dp">Try: <code>"I've lost all my data and I'm panicking."</code></div>
+            <div class="dp">Try: <code>"I was charged €400 with no warning."</code></div>
+            <div class="dp">Try: <code>"I think someone hacked my account."</code></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Announcements -->
+      <section class="card">
+        <div class="card-hd">
+          <strong>Announcements</strong>
+          <span class="sub">Latest updates</span>
+        </div>
+        <div class="card-bd">
+          <div class="ann">
+            <strong>Alphea v2.3 deployed</strong>
+            <small>Improved criticality detection and faster DeBERTa inference across all plans.</small>
+            <div class="ann-meta">
+              <span class="a-chip">AI Update</span>
+              <small style="color:#9ca3af;">Today</small>
+            </div>
+          </div>
+          <div class="ann">
+            <strong>Scheduled maintenance</strong>
+            <small>Brief downtime expected Sunday 01:00–02:00 UTC. Tickets will queue during this window.</small>
+            <div class="ann-meta">
+              <span class="a-chip warn">Maintenance</span>
+              <small style="color:#9ca3af;">Dec 22</small>
+            </div>
+          </div>
+          <div class="ann">
+            <strong>Escalation transparency</strong>
+            <small>You now receive a notification when your case is routed to a human agent.</small>
+            <div class="ann-meta">
+              <span class="a-chip blue">Feature</span>
+              <small style="color:#9ca3af;">Dec 18</small>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </aside>
+  </main>
+
+  <footer>
+    <span>Nexus (Demo) · Visual mockup for thesis presentation. No real data stored or transmitted.</span>
+    <span>Powered by Alphea AI · Rasa 3.x</span>
+  </footer>
+
+  <!-- Chatbot container -->
+  <div id="webchat"></div>
+
+  <!-- Rasa Webchat script -->
+  <script>
+    function boot() {
+      if (!window.WebChat || !window.WebChat.default) {
+        console.error("rasa-webchat not loaded");
+        return;
+      }
+      console.log("rasa-webchat loaded, mounting…");
+      window.WebChat.default(
+        {
+          selector: "#webchat",
+          initPayload: "/greet",
+          socketUrl: "http://127.0.0.1:5005",
+          socketPath: "/socket.io/",
+          title: "Alphea 🤖",
+          subtitle: "Nexus AI Support",
+          showFullScreenButton: true,
+          showCloseButton: true,
+          params: {
+            storage: "session",
+            headerColor: "#0f766e",
+            primaryColor: "#0f766e",
+            secondaryColor: "#f0fdfa",
+            textColor: "#111827",
+            userTextColor: "#ffffff",
+            assistantBubbleColor: "#f0fdfa",
+            inputColor: "#ffffff",
+            inputBorderColor: "#ccfbf1"
+          },
+          socketOptions: { transports: ["polling"] }
+        },
+        null
+      );
+    }
+
+    (function loadWidget() {
+      const s1 = document.createElement("script");
+      s1.src = "https://cdn.jsdelivr.net/npm/rasa-webchat@1.0.1/lib/index.js";
+      s1.async = true;
+      s1.onload = boot;
+      s1.onerror = function() {
+        console.warn("jsDelivr failed, trying unpkg…");
+        const s2 = document.createElement("script");
+        s2.src = "https://unpkg.com/rasa-webchat@1.0.1/lib/index.js";
+        s2.async = true;
+        s2.onload = boot;
+        s2.onerror = () => console.error("Failed to load rasa-webchat from both CDNs");
+        document.head.appendChild(s2);
+      };
+      document.head.appendChild(s1);
+    })();
+  </script>
+
+</body>
+</html>

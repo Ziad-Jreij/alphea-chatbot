@@ -11,18 +11,17 @@ Alphea is a production-ready e-commerce customer service chatbot built on Rasa 3
                         │                  Docker Network                     │
                         │                                                      │
   Browser / Widget ────▶│  Rasa Dialog Server  :5005                          │
-                        │  ┌───────────────────────────────────────────────┐  │
-                        │  │  NLU pipeline                                 │  │
-                        │  │   1. WhitespaceTokenizer → DIETClassifier     │  │
-                        │  │   2. EmotionClassifierComponent (DistilBERT)  │  │
-                        │  │   3. CriticalityZeroShotComponent (DeBERTa)   │  │
-                        │  └──────────────────┬────────────────────────────┘  │
+                        │  • NLU: BERT features → DIETClassifier (intents)     │
+                        │  • dialogue policies, forms                          │
+                        │  • HTTP API protected by RASA_AUTH_TOKEN             │
                         │                     │ webhook                        │
                         │                     ▼                                │
-                        │  Rasa Actions Server  :5055                          │
+                        │  Rasa Actions Server  :5055 (internal)               │
+                        │  • emotion detection (DistilBERT)                    │
+                        │  • criticality scoring (DeBERTa zero-shot)           │
+                        │  • ABSA per turn (MiniLM)                            │
                         │  • order lookups (mock / REST)                       │
-                        │  • ABSA per turn                                     │
-                        │  • pushes session state → Dashboard                  │
+                        │  • pushes session state → Dashboard (ingest token)   │
                         │                     │                                │
                         │          ┌──────────┴──────────┐                     │
                         │          │                     │                     │
@@ -43,7 +42,7 @@ Alphea is a production-ready e-commerce customer service chatbot built on Rasa 3
 
 - **Docker** ≥ 24 and **Docker Compose** ≥ 2.20
 - **4 GB RAM** minimum (models load into the actions container; 6 GB recommended)
-- A trained Rasa model `.tar.gz` placed in `./models/` (see [Training](#training))
+- A trained Rasa model `.tar.gz` in `./models/` — see [Training](#training) (the directory is gitignored, so a fresh clone has none)
 - Internet access on first startup so the actions container can download model weights from HuggingFace Hub (~700 MB total for all three AI models; cached in the `hf_cache` Docker volume)
 
 ---
@@ -54,34 +53,44 @@ Alphea is a production-ready e-commerce customer service chatbot built on Rasa 3
 git clone https://github.com/Ziad-Jreij/alphea-chatbot.git
 cd alphea-chatbot
 
-# Copy the example env file and edit secrets before going to production
+# Copy the example env file and fill in the four required secrets.
+# The dashboard refuses to start while they are empty or set to defaults.
 cp .env.example .env
+for k in JWT_SECRET_KEY DASHBOARD_INGEST_TOKEN RASA_AUTH_TOKEN; do
+  sed -i "s/^$k=.*/$k=$(openssl rand -hex 32)/" .env
+done
+# ...and set DASHBOARD_PASSWORD (12+ characters) yourself.
+
+# Train a model on first run (see Training below)
+mkdir -p models
+docker-compose run --rm --no-deps --build --user "$(id -u):0" rasa train
 
 # Bring up the full stack (postgres → dashboard → rasa-actions → rasa → monitoring)
 docker-compose up --build
 ```
 
-Services come up in dependency order. On first run, wait ~60 s for the actions container to download and cache model weights.
+Services come up in dependency order. On first run the actions container downloads ~700 MB of model weights into the `hf_cache` volume before it reports healthy, and Rasa waits for it — expect several minutes on a slow connection. Later starts take seconds.
 
-| Service | URL |
-|---|---|
-| Rasa REST API | http://localhost:5005 |
-| Action Server | http://localhost:5055 |
-| Admin Dashboard | http://localhost:5001 |
-| Prometheus | http://localhost:9090 |
-| Grafana | http://localhost:3000 |
+| Service | URL | Exposure |
+|---|---|---|
+| Rasa (chat + HTTP API) | http://localhost:5005 | public — API needs `?token=$RASA_AUTH_TOKEN` |
+| Admin Dashboard | http://localhost:5001 | public — JWT login |
+| Action Server | http://localhost:5055 | bound to 127.0.0.1 only |
+| PostgreSQL | localhost:5432 | bound to 127.0.0.1 only |
+| Prometheus | http://localhost:9090 | bound to 127.0.0.1 only |
+| Grafana | http://localhost:3000 | bound to 127.0.0.1 only |
 
 Log in to the dashboard at http://localhost:5001 with the credentials set in `DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD`.
 
 ### Training
 
-If you don't have a pre-built model, run training inside the Rasa container:
+Train inside the Rasa container whenever `domain.yml`, `config.yml` or anything under `data/` changes — Rasa serves the domain baked into the model, so edits are invisible until you retrain:
 
 ```bash
-docker-compose run --rm rasa train
+docker-compose run --rm --no-deps --build --user "$(id -u):0" rasa train
 ```
 
-The model is written to `./models/` and picked up automatically on the next `docker-compose up`.
+`--build` matters: training data is copied into the image. The model is written to `./models/` and the newest one is loaded on the next `docker-compose up`. `--user "$(id -u):0"` runs training as your host user so it can write the model into `./models`. The first run downloads BERT weights (~440 MB) into the `rasa_hf_cache` volume; later runs reuse them.
 
 ---
 
@@ -121,7 +130,7 @@ With the heuristic layer enabled (production default), HIGH recall rises above 9
 | CPU only | ~1500 ms | Development, low-traffic demos (< 5 concurrent users) |
 | NVIDIA GPU (e.g. T4) | ~30–50 ms | Production, > 10 concurrent users |
 
-**CPU is usable** thanks to the built-in LRU response cache (512 entries, configurable via `cache_max_size` in `config.yml`). Repeated or structurally similar messages within a session are never re-inferred. For a typical support conversation where many turns repeat intent patterns, most turns hit the cache.
+**CPU is usable** for development and low-traffic demos: each user turn is scored once by the action server, so a ~1.5 s criticality pass is added to the bot's reply time. Switch to the xsmall model (below) or a GPU before putting real traffic on it.
 
 **GPU is recommended for production.** At ~40 ms per message the latency is invisible to users regardless of traffic.
 
@@ -162,23 +171,27 @@ sudo systemctl restart docker
               capabilities: [gpu]
 ```
 
-**3. Set `GPU_ENABLED=true` in your `.env` and restart:**
+**3. Build the actions image with CUDA-enabled torch, set `GPU_ENABLED=true` in your `.env`, and restart:**
+
+The default image installs CPU-only torch, so the `deploy` block alone is not enough.
 
 ```bash
+# in .env
+TORCH_INDEX=https://download.pytorch.org/whl/cu128
 GPU_ENABLED=true
+
 docker-compose up --build rasa-actions
 ```
 
 ### CPU-only alternative model
 
-If you cannot use a GPU and need faster CPU inference, you can swap to the xsmall variant (~450 ms, comparable accuracy) by changing one line in `config.yml`:
+If you cannot use a GPU and need faster CPU inference, you can swap to the xsmall variant (~450 ms) by setting one variable in `.env` and restarting `rasa-actions`:
 
-```yaml
-- name: components.criticality.CriticalityZeroShotComponent
-  model_name: "MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33"
+```bash
+CRITICALITY_MODEL=MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33
 ```
 
-The pipeline API is identical — no other changes required.
+The pipeline API is identical — no other changes required. Note the xsmall accuracy figure above has not yet been measured on the same benchmark as the other rows.
 
 ---
 
@@ -194,18 +207,26 @@ All variables are documented in `.env.example`. Copy it to `.env` and fill in re
 | `DB_NAME` | `chatbot` | Database name |
 | `DB_USER` | `chatbot` | Database user |
 | `DB_PASSWORD` | `chatbot` | Database password — **change in production** |
-| `JWT_SECRET_KEY` | `dev-secret-…` | Signs dashboard JWT tokens — **must be changed in production** |
+| `JWT_SECRET_KEY` | _(required)_ | Signs dashboard JWT tokens. ≥ 32 random chars; the dashboard won't start without it |
+| `DASHBOARD_INGEST_TOKEN` | _(required)_ | Shared secret the action server sends to `/api/update_session`. ≥ 32 random chars |
+| `RASA_AUTH_TOKEN` | _(required)_ | Protects the Rasa HTTP API; `docker-compose` refuses to start without it |
 | `DASHBOARD_USERNAME` | `admin` | Admin login username |
-| `DASHBOARD_PASSWORD` | `changeme` | Admin login password — **change in production** |
+| `DASHBOARD_PASSWORD` | _(required)_ | Admin login password, ≥ 12 chars, not a default |
 | `DASHBOARD_BACKEND_URL` | `http://localhost:5001` | URL the action server uses to push session state |
 | `DASHBOARD_PORT` | `5001` | Port the Flask dashboard listens on |
 | `RASA_ACTION_ENDPOINT` | `http://localhost:5055/webhook` | Action server webhook URL |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins for the dashboard API |
+| `RASA_CORS_ORIGINS` | `*` | Allowed origin for the Rasa chat socket — set to your site in production |
+| `TRUSTED_PROXY_COUNT` | `0` | Reverse proxies in front of the dashboard; only then is `X-Forwarded-For` trusted |
+| `RATELIMIT_STORAGE_URI` | `memory://` | Rate-limit store; `docker-compose` sets the bundled Redis |
 | `FLASK_DEBUG` | `false` | Enable Flask debug mode (never `true` in production) |
 | `GUNICORN_WORKERS` | `2` | Dashboard gunicorn worker count |
 | `GRAFANA_USER` | `admin` | Grafana admin username |
 | `GRAFANA_PASSWORD` | `changeme` | Grafana admin password |
-| `GPU_ENABLED` | `auto` | `auto` / `true` / `false` — see [GPU Acceleration](#gpu-acceleration) |
+| `GPU_ENABLED` | `auto` | `auto` / `true` / `false` — see [Controlling GPU usage](#controlling-gpu-usage) |
+| `TORCH_INDEX` | CPU wheels | Build-time torch index for `rasa-actions`; use `https://download.pytorch.org/whl/cu128` for GPU |
+| `PRELOAD_MODELS` | `true` | Load AI models before the action server starts listening, so the first chat doesn't time out |
+| `CRITICALITY_MODEL` | `MoritzLaurer/deberta-v3-base-zeroshot-v2.0` | HuggingFace zero-shot model for criticality scoring |
 | `ORDER_PROVIDER` | `mock` | `mock` for development, `rest` for a real backend |
 | `ORDER_API_BASE_URL` | _(unset)_ | Required when `ORDER_PROVIDER=rest` |
 | `ORDER_API_KEY` | _(unset)_ | Bearer token sent to the order API |
@@ -214,6 +235,8 @@ All variables are documented in `.env.example`. Copy it to `.env` and fill in re
 ---
 
 ## AI Components
+
+All three run in the **action server**, not the Rasa NLU pipeline, so only one container needs torch and the model weights. Each user turn is scored once, from `_infer_emotion_slots` in [`actions/actions.py`](actions/actions.py).
 
 ### 1. Emotion Detection (`components/emotion.py`)
 
