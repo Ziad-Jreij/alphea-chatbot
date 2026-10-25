@@ -202,6 +202,10 @@ slots:
     type: text
     influence_conversation: true
     mappings:
+      # "where is my order ORD-12345" carries the ID up front; without this
+      # mapping the form ignored it and asked again.
+      - type: from_entity
+        entity: order_id
       - type: from_text
         conditions:
           - active_loop: order_status_form
@@ -218,6 +222,8 @@ slots:
           - no_order_id
           - nlu_fallback
           - out_of_scope
+          - talk_to_human
+          - urgent_contact
   reuse_ok:
     type: categorical
     values: ["yes", "no"]
@@ -228,6 +234,7 @@ slots:
             requested_slot: reuse_ok
           - active_loop: confirm_reuse_damage_form
             requested_slot: reuse_ok
+        not_intent: [talk_to_human, urgent_contact]
   email:
     type: text
     influence_conversation: true
@@ -238,6 +245,7 @@ slots:
         conditions:
           - active_loop: password_reset_form
             requested_slot: email
+        not_intent: [talk_to_human, urgent_contact]
   lookup_email:
     type: text
     influence_conversation: false
@@ -246,6 +254,7 @@ slots:
         conditions:
           - active_loop: order_lookup_by_email_form
             requested_slot: lookup_email
+        not_intent: [talk_to_human, urgent_contact]
   new_address:
     type: text
     influence_conversation: false
@@ -254,6 +263,7 @@ slots:
         conditions:
           - active_loop: address_update_form
             requested_slot: new_address
+        not_intent: [talk_to_human, urgent_contact]
   confirm_cancel:
     type: bool
     influence_conversation: true
@@ -278,6 +288,7 @@ slots:
         conditions:
           - active_loop: return_form
             requested_slot: return_reason
+        not_intent: [talk_to_human, urgent_contact]
   last_soft_affirmation_ts:
     type: text
     mappings:
@@ -291,6 +302,7 @@ slots:
         conditions:
           - active_loop: damage_report_form
             requested_slot: issue_description
+        not_intent: [talk_to_human, urgent_contact]
 responses:
   #get conversation feedback via emojies
   utter_ask_conversation_feedback:

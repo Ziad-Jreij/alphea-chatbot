@@ -1,6 +1,6 @@
 # components/emotion.py
 from __future__ import annotations
-from typing import Any, Dict, List, Optional, Text
+from typing import Any, Dict, List, Text
 
 # Rasa framework classes are only available in the dialog server (rasa package),
 # not in the action server (rasa-sdk only). Guard so this module can be imported

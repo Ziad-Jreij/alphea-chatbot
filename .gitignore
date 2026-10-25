@@ -16,3 +16,15 @@ __pycache__/
 # Runtime-generated session data — not source code
 datasets/conversation_sessions.csv
 datasets/aspect_sentiment_sessions.csv
+# Tool caches
+.ruff_cache/
+.pytest_cache/
+
+# CI / local test outputs
+.ci-cache/
+ci-models/
+ci-results/
+results/
+.cache/
+.config/
+.keras/

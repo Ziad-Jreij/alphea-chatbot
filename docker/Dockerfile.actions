@@ -15,14 +15,8 @@ ARG TORCH_INDEX=https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir torch==2.7.1 \
     --index-url ${TORCH_INDEX} --extra-index-url https://pypi.org/simple
 
-RUN pip install --no-cache-dir \
-    rasa-sdk==3.6.* \
-    transformers==4.* \
-    sentence-transformers==2.* \
-    requests \
-    pyyaml \
-    psycopg2-binary==2.9.* \
-    structlog==23.*
+COPY requirements/actions.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY actions/       ./actions/
 COPY components/    ./components/

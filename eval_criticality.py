@@ -1,183 +1,95 @@
 """
-Criticality model benchmark: DeBERTa-v3-base-zeroshot-v2 vs BART-large-mnli.
+Criticality benchmark.
 
-Runs both models on the same 40-message test set with human ground-truth labels,
-then reports per-class accuracy, macro-F1, latency, and head-to-head deltas.
-The heuristic layer (keywords + structural rules) is intentionally bypassed so
-we measure raw model quality, not guardrail quality.
+Scores criticality models on the labelled set in data/eval/criticality_benchmark.yml
+in two modes:
 
-Usage:
-    python eval_criticality.py [--skip-bart]   # skip BART to save time/memory
+  raw       zero-shot model argmax only — measures model quality
+  pipeline  the production path (keyword guardrails → model → emotion prior →
+            structural rules), i.e. infer_criticality_for_text() exactly as the
+            action server calls it — measures what users actually get
+
+Usage (inside the rasa-actions image, models cached in the hf_cache volume):
+    docker compose run --rm --no-deps -v "$PWD":/app -w /app rasa-actions \\
+        python eval_criticality.py --json results/criticality.json
+
+    python eval_criticality.py --models deberta-base --modes pipeline --show-errors
+    python eval_criticality.py --source thesis          # original 40 cases only
 """
 
-import sys
-import time
-import math
-import statistics
 import argparse
-from typing import Optional
+import json
+import statistics
+import time
+from collections import defaultdict
+from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# Ground-truth test set  (40 messages, balanced across low/medium/high)
-# ---------------------------------------------------------------------------
-# Includes: clear-cut cases, edge cases, negation traps, hearsay, contrast
-# structures, compound complaints, and polite inquiries.
+import yaml
 
-TEST_CASES = [
-    # ── LOW ──────────────────────────────────────────────────────────────────
-    {"text": "Hi, what are your shipping times to London?",
-     "label": "low"},
-    {"text": "Can I change the color of my order before it ships?",
-     "label": "low"},
-    {"text": "Do you offer gift wrapping?",
-     "label": "low"},
-    {"text": "I just wanted to say thank you, everything arrived perfectly.",
-     "label": "low"},
-    {"text": "What is your return policy?",
-     "label": "low"},
-    {"text": "My order status says processing, is that normal?",
-     "label": "low"},
-    {"text": "Do you ship internationally?",
-     "label": "low"},
-    {"text": "How long does standard delivery take?",
-     "label": "low"},
-    {"text": "I'm wondering if this item is compatible with my phone.",
-     "label": "low"},
-    {"text": "I heard this might be a scam but I'm just checking.",  # hearsay trap
-     "label": "low"},
+BENCHMARK = Path(__file__).resolve().parent / "data" / "eval" / "criticality_benchmark.yml"
+CLASSES = ["low", "medium", "high"]
 
-    # ── MEDIUM ───────────────────────────────────────────────────────────────
-    {"text": "My package is 3 days late, can you look into this?",
-     "label": "medium"},
-    {"text": "I received the wrong item in my order.",
-     "label": "medium"},
-    {"text": "The item I got is slightly different from what was shown online.",
-     "label": "medium"},
-    {"text": "I've been waiting a week for a refund and haven't heard anything.",
-     "label": "medium"},
-    {"text": "I ordered two items but only received one.",
-     "label": "medium"},
-    {"text": "The packaging was damaged when it arrived, but the product looks okay.",
-     "label": "medium"},
-    {"text": "I need to change my delivery address, the order hasn't shipped yet.",
-     "label": "medium"},
-    {"text": "The app keeps showing an error when I try to track my order.",
-     "label": "medium"},
-    {"text": "My discount code didn't apply at checkout even though it should be valid.",
-     "label": "medium"},
-    {"text": "I emailed support two days ago and haven't gotten a reply.",
-     "label": "medium"},
-
-    # ── HIGH ─────────────────────────────────────────────────────────────────
-    {"text": "My card was charged twice and I need this fixed immediately!",
-     "label": "high"},
-    {"text": "The device started smoking and I turned it off — is this a safety issue?",
-     "label": "high"},
-    {"text": "I've reported this problem four times and no one is helping me.",
-     "label": "high"},
-    {"text": "Someone made a purchase on my account that I did not authorise.",
-     "label": "high"},
-    {"text": "I think my account has been hacked, please help urgently.",
-     "label": "high"},
-    {"text": "The product caught fire and I had to throw it out the window!",
-     "label": "high"},
-    {"text": "I'm extremely frustrated — this is the third time you've sent the wrong order.",
-     "label": "high"},
-    {"text": "I received medication with the wrong dosage label on it.",
-     "label": "high"},
-    {"text": "There's an unauthorized charge of $400 on my account from yesterday.",
-     "label": "high"},
-    {"text": "My child almost swallowed a small part that fell off your product.",
-     "label": "high"},
-
-    # ── EDGE / MIXED ─────────────────────────────────────────────────────────
-    {"text": "The delivery was fine but the product stopped working after one day.",
-     "label": "high"},   # contrast: fine BUT broken
-    {"text": "Everything went smoothly, no complaints at all.",
-     "label": "low"},
-    {"text": "My card was NOT stolen, I'm just checking a charge.",  # negation trap
-     "label": "low"},
-    {"text": "I'm not saying there's fraud, just a charge I don't recognise.",  # negation
-     "label": "medium"},
-    {"text": "I've contacted you three times about a missing refund with no response.",
-     "label": "high"},   # repeated frustration
-    {"text": "The product is okay but the customer service was really disappointing.",
-     "label": "medium"},
-    {"text": "I want to return an item — it just isn't the right size.",
-     "label": "low"},
-    {"text": "Your app keeps crashing every time I open the checkout page.",
-     "label": "high"},   # core-function failure
-    {"text": "I accidentally ordered two, can you cancel one?",
-     "label": "low"},
-    {"text": "I've been a loyal customer for years and this experience has been terrible.",
-     "label": "medium"},
-]
-
-# ---------------------------------------------------------------------------
-# Models to benchmark
-# ---------------------------------------------------------------------------
 MODELS = {
-    "DeBERTa-v3  (new)": "MoritzLaurer/deberta-v3-base-zeroshot-v2.0",
-    "BART-large  (old)": "facebook/bart-large-mnli",
+    "deberta-base":   "MoritzLaurer/deberta-v3-base-zeroshot-v2.0",
+    "deberta-xsmall": "MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33",
+    "bart-large":     "facebook/bart-large-mnli",
 }
 
-CANDIDATE_LABELS = ["low urgency", "medium urgency", "high urgency"]
-HYPOTHESIS      = "This support request is {}."
-LABEL_MAP       = {"low urgency": "low", "medium urgency": "medium", "high urgency": "high"}
 
 # ---------------------------------------------------------------------------
-# Inference helpers
+# Data
 # ---------------------------------------------------------------------------
 
-def run_model(pipe, text: str) -> str:
-    result = pipe(
-        text,
-        candidate_labels=CANDIDATE_LABELS,
-        hypothesis_template=HYPOTHESIS,
-        multi_label=False,
-    )
-    top = result["labels"][0]
-    return LABEL_MAP[top]
+def load_cases(source: str) -> list:
+    cases = yaml.safe_load(BENCHMARK.read_text())["cases"]
+    if source != "all":
+        cases = [c for c in cases if c["source"] == source]
+    return cases
 
 
-def benchmark(model_name: str, label: str, cases: list) -> dict:
-    from transformers import pipeline
-    import torch
+def emotion_labels(cases: list) -> list:
+    """Raw GoEmotions top label per case — the prior the action server uses."""
+    from components.emotion import ensure_emotion_pipe
 
-    print(f"\n{'─'*60}")
-    print(f"  Loading: {label}  ({model_name})")
-    print(f"{'─'*60}")
+    pipe = ensure_emotion_pipe()
+    out = []
+    for c in cases:
+        preds = pipe(c["text"])[0]
+        out.append(max(preds, key=lambda p: p["score"])["label"])
+    return out
 
-    device = 0 if torch.cuda.is_available() else -1
-    device_name = "GPU" if device == 0 else "CPU"
-    print(f"  Device: {device_name}")
 
+# ---------------------------------------------------------------------------
+# Inference
+# ---------------------------------------------------------------------------
+
+def run_model(model_key: str, cases: list, modes: list, emotions: list) -> dict:
+    from components import criticality as crit
+
+    model_name = MODELS[model_key]
+    crit._crit_pipe = None               # ensure_crit_pipe caches the first model
     t_load = time.time()
-    pipe = pipeline("zero-shot-classification", model=model_name, device=device)
+    pipe = crit.ensure_crit_pipe(model_name)
     load_time = time.time() - t_load
-    print(f"  Model loaded in {load_time:.1f}s")
+    print(f"  {model_key}: loaded in {load_time:.1f}s")
 
-    predictions = []
-    latencies   = []
-
-    for case in cases:
-        t0 = time.time()
-        pred = run_model(pipe, case["text"])
-        latencies.append(time.time() - t0)
-        predictions.append({
-            "text":  case["text"],
-            "truth": case["label"],
-            "pred":  pred,
-            "ok":    pred == case["label"],
-        })
-
-    return {
-        "label":       label,
-        "model_name":  model_name,
-        "predictions": predictions,
-        "latencies":   latencies,
-        "load_time":   load_time,
-    }
+    label_map = {"low urgency": "low", "medium urgency": "medium", "high urgency": "high"}
+    results = {}
+    for mode in modes:
+        preds, latencies = [], []
+        for case, emo in zip(cases, emotions):
+            t0 = time.time()
+            if mode == "raw":
+                zs = pipe(case["text"], candidate_labels=crit._CRIT_LABELS,
+                          hypothesis_template=crit._CRIT_HYPOTHESIS, multi_label=False)
+                pred, source = label_map[zs["labels"][0]], "model"
+            else:
+                res = crit.infer_criticality_for_text(case["text"], emo, model_name=model_name)
+                pred, source = res["criticality_level"], res["source"]
+            latencies.append(time.time() - t0)
+            preds.append({**case, "pred": pred, "decided_by": source, "emotion": emo})
+        results[mode] = {"predictions": preds, "latencies": latencies}
+    return {"model": model_key, "model_name": model_name, "load_time": load_time, "modes": results}
 
 
 # ---------------------------------------------------------------------------
@@ -185,14 +97,12 @@ def benchmark(model_name: str, label: str, cases: list) -> dict:
 # ---------------------------------------------------------------------------
 
 def compute_metrics(predictions: list) -> dict:
-    classes = ["low", "medium", "high"]
-    tp = {c: 0 for c in classes}
-    fp = {c: 0 for c in classes}
-    fn = {c: 0 for c in classes}
-
+    tp = {c: 0 for c in CLASSES}
+    fp = {c: 0 for c in CLASSES}
+    fn = {c: 0 for c in CLASSES}
     for p in predictions:
-        t, pr = p["truth"], p["pred"]
-        for c in classes:
+        t, pr = p["label"], p["pred"]
+        for c in CLASSES:
             if t == c and pr == c:
                 tp[c] += 1
             elif t != c and pr == c:
@@ -201,106 +111,91 @@ def compute_metrics(predictions: list) -> dict:
                 fn[c] += 1
 
     precision, recall, f1 = {}, {}, {}
-    for c in classes:
-        prec = tp[c] / (tp[c] + fp[c]) if (tp[c] + fp[c]) > 0 else 0.0
-        rec  = tp[c] / (tp[c] + fn[c]) if (tp[c] + fn[c]) > 0 else 0.0
-        f1[c]        = 2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0.0
-        precision[c] = prec
-        recall[c]    = rec
+    for c in CLASSES:
+        prec = tp[c] / (tp[c] + fp[c]) if (tp[c] + fp[c]) else 0.0
+        rec = tp[c] / (tp[c] + fn[c]) if (tp[c] + fn[c]) else 0.0
+        precision[c], recall[c] = prec, rec
+        f1[c] = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
 
-    correct = sum(1 for p in predictions if p["ok"])
-    accuracy = correct / len(predictions)
-    macro_f1 = sum(f1.values()) / len(classes)
-
+    correct = sum(1 for p in predictions if p["label"] == p["pred"])
     return {
-        "accuracy":  accuracy,
-        "macro_f1":  macro_f1,
-        "precision": precision,
-        "recall":    recall,
-        "f1":        f1,
-        "correct":   correct,
-        "total":     len(predictions),
+        "accuracy": correct / len(predictions) if predictions else 0.0,
+        "macro_f1": sum(f1.values()) / len(CLASSES),
+        "precision": precision, "recall": recall, "f1": f1,
+        "correct": correct, "total": len(predictions),
     }
+
+
+def grouped_accuracy(predictions: list, key) -> dict:
+    groups = defaultdict(list)
+    for p in predictions:
+        for g in key(p):
+            groups[g].append(p["label"] == p["pred"])
+    return {g: (sum(v), len(v)) for g, v in sorted(groups.items())}
 
 
 # ---------------------------------------------------------------------------
 # Reporting
 # ---------------------------------------------------------------------------
 
-def print_table(results: list):
-    classes = ["low", "medium", "high"]
-    sep = "═" * 72
+def pct(x: float) -> str:
+    return f"{x * 100:5.1f}%"
 
-    print(f"\n{sep}")
-    print("  BENCHMARK RESULTS")
-    print(sep)
 
-    for r in results:
-        m  = compute_metrics(r["predictions"])
-        lats = r["latencies"]
-        print(f"\n  {r['label']}")
-        print(f"  {'─'*50}")
-        print(f"  Accuracy  : {m['accuracy']*100:.1f}%  ({m['correct']}/{m['total']} correct)")
-        print(f"  Macro-F1  : {m['macro_f1']*100:.1f}%")
-        print(f"  Latency   : median {statistics.median(lats)*1000:.0f}ms  "
-              f"p95 {sorted(lats)[int(len(lats)*0.95)]*1000:.0f}ms  "
-              f"mean {statistics.mean(lats)*1000:.0f}ms")
-        print(f"  Load time : {r['load_time']:.1f}s")
-        print()
-        print(f"  {'Class':<8} {'Precision':>10} {'Recall':>10} {'F1':>10}")
-        print(f"  {'─'*42}")
-        for c in classes:
-            print(f"  {c:<8} {m['precision'][c]*100:>9.1f}% {m['recall'][c]*100:>9.1f}% {m['f1'][c]*100:>9.1f}%")
+def report(runs: list, show_errors: bool) -> None:
+    sep = "═" * 76
+    print(f"\n{sep}\n  SUMMARY\n{sep}")
+    print(f"  {'model':<15} {'mode':<9} {'acc':>6} {'macroF1':>8} {'HIGH-P':>7} {'HIGH-R':>7} "
+          f"{'LOW→HIGH':>9} {'median ms':>10}")
+    for run in runs:
+        for mode, r in run["modes"].items():
+            m = compute_metrics(r["predictions"])
+            false_alarms = sum(1 for p in r["predictions"] if p["label"] == "low" and p["pred"] == "high")
+            lat = statistics.median(r["latencies"]) * 1000
+            print(f"  {run['model']:<15} {mode:<9} {pct(m['accuracy'])} {pct(m['macro_f1']):>8} "
+                  f"{pct(m['precision']['high']):>7} {pct(m['recall']['high']):>7} "
+                  f"{false_alarms:>9} {lat:>10.0f}")
 
-    # Head-to-head delta (only when both models ran)
-    if len(results) == 2:
-        m0 = compute_metrics(results[0]["predictions"])
-        m1 = compute_metrics(results[1]["predictions"])
-        d_acc = (m0["accuracy"] - m1["accuracy"]) * 100
-        d_f1  = (m0["macro_f1"] - m1["macro_f1"]) * 100
-        lat0  = statistics.median(results[0]["latencies"]) * 1000
-        lat1  = statistics.median(results[1]["latencies"]) * 1000
-        speedup = lat1 / lat0 if lat0 > 0 else 0
+    for run in runs:
+        for mode, r in run["modes"].items():
+            preds = r["predictions"]
+            m = compute_metrics(preds)
+            print(f"\n{sep}\n  {run['model']} — {mode}   ({m['correct']}/{m['total']} correct)\n{sep}")
+            print(f"  {'class':<8} {'precision':>10} {'recall':>8} {'f1':>8}")
+            for c in CLASSES:
+                print(f"  {c:<8} {pct(m['precision'][c]):>10} {pct(m['recall'][c]):>8} {pct(m['f1'][c]):>8}")
+            by_source = grouped_accuracy(preds, lambda p: [p["source"]])
+            by_tag = grouped_accuracy(preds, lambda p: p.get("tags") or [])
+            print("  by source: " + ", ".join(f"{k} {a}/{n}" for k, (a, n) in by_source.items()))
+            if by_tag:
+                print("  by trap:   " + ", ".join(f"{k} {a}/{n}" for k, (a, n) in by_tag.items()))
+            if show_errors:
+                print("  errors:")
+                for p in preds:
+                    if p["label"] != p["pred"]:
+                        print(f"    {p['label']:>6} → {p['pred']:<6} [{p['decided_by']}] {p['text']}")
 
-        print(f"\n{sep}")
-        print("  HEAD-TO-HEAD: DeBERTa (new) vs BART (old)")
-        print(sep)
-        sign = lambda x: ("+" if x > 0 else "") + f"{x:.1f}"
-        print(f"  Accuracy delta  : {sign(d_acc)} pp  "
-              f"({'DeBERTa wins' if d_acc > 0 else 'BART wins' if d_acc < 0 else 'tie'})")
-        print(f"  Macro-F1 delta  : {sign(d_f1)} pp")
-        print(f"  Median latency  : DeBERTa {lat0:.0f}ms  BART {lat1:.0f}ms  "
-              f"  →  {speedup:.1f}× {'faster' if speedup > 1 else 'slower'} per message")
-        print()
 
-    # Per-case breakdown
-    print(f"\n{sep}")
-    print("  PER-CASE BREAKDOWN  (ground truth → model predictions)")
-    print(sep)
-    header = f"  {'Truth':<7}"
-    for r in results:
-        col = r['label'].split()[0]   # "DeBERTa" or "BART"
-        header += f"  {col:<8}"
-    header += f"  Text"
-    print(header)
-    print(f"  {'─'*68}")
-
-    for i, case in enumerate(TEST_CASES):
-        truth = case["label"]
-        row   = f"  {truth:<7}"
-        any_wrong = False
-        for r in results:
-            pred = r["predictions"][i]["pred"]
-            ok   = pred == truth
-            mark = "  " if ok else "✗ "
-            row += f"  {mark}{pred:<6}"
-            if not ok:
-                any_wrong = True
-        trunc = case["text"][:52] + "…" if len(case["text"]) > 52 else case["text"]
-        flag  = " ◀" if any_wrong else ""
-        print(row + f"  {trunc}{flag}")
-
-    print()
+def write_json(runs: list, path: str) -> None:
+    out = []
+    for run in runs:
+        for mode, r in run["modes"].items():
+            m = compute_metrics(r["predictions"])
+            out.append({
+                "model": run["model"], "model_name": run["model_name"], "mode": mode,
+                "accuracy": m["accuracy"], "macro_f1": m["macro_f1"],
+                "precision": m["precision"], "recall": m["recall"], "f1": m["f1"],
+                "median_latency_ms": statistics.median(r["latencies"]) * 1000,
+                "low_to_high_false_alarms": sum(
+                    1 for p in r["predictions"] if p["label"] == "low" and p["pred"] == "high"),
+                "errors": [
+                    {k: p.get(k) for k in ("text", "label", "pred", "decided_by", "source", "tags")}
+                    for p in r["predictions"] if p["label"] != p["pred"]
+                ],
+            })
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(json.dumps(out, indent=2))
+    print(f"\n  wrote {path}")
 
 
 # ---------------------------------------------------------------------------
@@ -308,32 +203,28 @@ def print_table(results: list):
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--skip-bart", action="store_true",
-                        help="Only run DeBERTa (faster, lower memory)")
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--models", nargs="+", default=["deberta-base", "deberta-xsmall"], choices=MODELS)
+    parser.add_argument("--modes", nargs="+", default=["raw", "pipeline"], choices=["raw", "pipeline"])
+    parser.add_argument("--source", default="all", choices=["all", "thesis", "draft"])
+    parser.add_argument("--no-emotion", action="store_true",
+                        help="pipeline mode without the emotion prior (skips the emotion model)")
+    parser.add_argument("--show-errors", action="store_true")
+    parser.add_argument("--json", help="write machine-readable results to this path")
     args = parser.parse_args()
 
-    print("\n" + "═"*72)
-    print("  CRITICALITY MODEL BENCHMARK")
-    print("  40 labelled test messages  |  heuristics disabled (raw model only)")
-    print("═"*72)
+    cases = load_cases(args.source)
+    print(f"\n  {len(cases)} cases ({args.source}) from {BENCHMARK.name}")
 
-    to_run = list(MODELS.items())
-    if args.skip_bart:
-        to_run = [to_run[0]]  # only DeBERTa
+    emotions = [None] * len(cases)
+    if "pipeline" in args.modes and not args.no_emotion:
+        print("  scoring emotion prior …")
+        emotions = emotion_labels(cases)
 
-    results = []
-    for label, model_name in to_run:
-        try:
-            r = benchmark(model_name, label, TEST_CASES)
-            results.append(r)
-        except Exception as e:
-            print(f"\n  ERROR loading {label}: {e}")
-
-    if results:
-        print_table(results)
-    else:
-        print("No models ran successfully.")
+    runs = [run_model(m, cases, args.modes, emotions) for m in args.models]
+    report(runs, args.show_errors)
+    if args.json:
+        write_json(runs, args.json)
 
 
 if __name__ == "__main__":

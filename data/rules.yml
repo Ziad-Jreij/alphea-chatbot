@@ -208,17 +208,143 @@ rules:
     - action: utter_ask_more_help
 # --- Form Interruption Rules (Examples) ---
 
-- rule: Interrupt form for human handoff
+# A handoff request always wins over the active form. Context (order_id,
+# emotion tally) is deliberately kept so the human agent sees it.
+- rule: Interrupt order_status_form for human handoff
   condition:
-    - active_loop: password_reset_form
+    - active_loop: order_status_form
   steps:
-    - intent: talk_to_human
+    - or:
+      - intent: talk_to_human
+      - intent: urgent_contact
     - action: action_deactivate_loop
     - active_loop: null
-    - action: action_clear_context
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
     - action: action_request_handoff
     - action: action_push_state_to_dashboard
     - action: utter_handoff_ack
+
+- rule: Interrupt return_form for human handoff
+  condition:
+    - active_loop: return_form
+  steps:
+    - or:
+      - intent: talk_to_human
+      - intent: urgent_contact
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: action_request_handoff
+    - action: action_push_state_to_dashboard
+    - action: utter_handoff_ack
+
+- rule: Interrupt cancel_order_form for human handoff
+  condition:
+    - active_loop: cancel_order_form
+  steps:
+    - or:
+      - intent: talk_to_human
+      - intent: urgent_contact
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: action_request_handoff
+    - action: action_push_state_to_dashboard
+    - action: utter_handoff_ack
+
+- rule: Interrupt address_update_form for human handoff
+  condition:
+    - active_loop: address_update_form
+  steps:
+    - or:
+      - intent: talk_to_human
+      - intent: urgent_contact
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: action_request_handoff
+    - action: action_push_state_to_dashboard
+    - action: utter_handoff_ack
+
+- rule: Interrupt damage_report_form for human handoff
+  condition:
+    - active_loop: damage_report_form
+  steps:
+    - or:
+      - intent: talk_to_human
+      - intent: urgent_contact
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: action_request_handoff
+    - action: action_push_state_to_dashboard
+    - action: utter_handoff_ack
+
+- rule: Interrupt password_reset_form for human handoff
+  condition:
+    - active_loop: password_reset_form
+  steps:
+    - or:
+      - intent: talk_to_human
+      - intent: urgent_contact
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: action_request_handoff
+    - action: action_push_state_to_dashboard
+    - action: utter_handoff_ack
+
+- rule: Interrupt order_lookup_by_email_form for human handoff
+  condition:
+    - active_loop: order_lookup_by_email_form
+  steps:
+    - or:
+      - intent: talk_to_human
+      - intent: urgent_contact
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: action_request_handoff
+    - action: action_push_state_to_dashboard
+    - action: utter_handoff_ack
+
+- rule: Interrupt confirm_reuse_address_form for human handoff
+  condition:
+    - active_loop: confirm_reuse_address_form
+  steps:
+    - or:
+      - intent: talk_to_human
+      - intent: urgent_contact
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: action_request_handoff
+    - action: action_push_state_to_dashboard
+    - action: utter_handoff_ack
+
+- rule: Interrupt confirm_reuse_damage_form for human handoff
+  condition:
+    - active_loop: confirm_reuse_damage_form
+  steps:
+    - or:
+      - intent: talk_to_human
+      - intent: urgent_contact
+    - action: action_deactivate_loop
+    - active_loop: null
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: action_request_handoff
+    - action: action_push_state_to_dashboard
+    - action: utter_handoff_ack
+
 
 - rule: Interrupt reset form for order status
   condition:

@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main, Atlas]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Lint + unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: requirements/*.txt
+
+      - name: Install dependencies
+        run: |
+          pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple
+          pip install -r requirements/actions.txt -r requirements/dashboard.txt -r requirements/dev.txt
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Pytest
+        run: pytest -q
+
+  dialogue:
+    name: Rasa data validation + dialogue tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      RASA_IMAGE: rasa/rasa:3.6.20-full
+    steps:
+      - uses: actions/checkout@v4
+
+      # BERT weights for LanguageModelFeaturizer (~440 MB)
+      - name: Cache HuggingFace models
+        uses: actions/cache@v4
+        with:
+          path: .ci-cache/huggingface
+          key: hf-bert-base-uncased-v1
+
+      - name: Validate training data
+        run: |
+          docker run --rm --user root -v "$PWD":/app -w /app "$RASA_IMAGE" \
+            data validate --domain domain.yml --data data
+
+      - name: Train
+        run: |
+          mkdir -p .ci-cache/huggingface ci-models
+          docker run --rm --user root -v "$PWD":/app -w /app \
+            -v "$PWD/.ci-cache/huggingface":/root/.cache/huggingface -e HOME=/root \
+            "$RASA_IMAGE" train --out ci-models
+
+      - name: Dialogue tests
+        run: |
+          docker run --rm --user root -v "$PWD":/app -w /app "$RASA_IMAGE" \
+            test core --model ci-models --stories tests/test_stories.yml \
+            --out ci-results --fail-on-prediction-errors
+
+      - name: Upload failed stories
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rasa-test-results
+          path: ci-results/

@@ -5,7 +5,6 @@ import io
 import jwt
 import time
 from pathlib import Path
-import logging
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from functools import wraps
@@ -16,7 +15,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.middleware.proxy_fix import ProxyFix
-from sqlalchemy import create_engine, Column, String, DateTime, text
+from sqlalchemy import create_engine, Column, String, DateTime, JSON, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -88,7 +87,8 @@ class Base(DeclarativeBase):
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
     session_id = Column(String,  primary_key=True)
-    data       = Column(JSONB,   nullable=False, default=dict)
+    # JSONB on PostgreSQL; plain JSON elsewhere (SQLite in unit tests).
+    data       = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False, default=dict)
     status     = Column(String(20), index=True,  default="green")
     updated_at = Column(DateTime(timezone=True), index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

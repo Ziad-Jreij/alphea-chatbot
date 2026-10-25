@@ -117,35 +117,39 @@ The AI models run on **GPU if one is available, CPU otherwise** — no configura
 
 ### Model benchmark — criticality component
 
-The criticality component has been benchmarked on 40 labelled customer-service messages with the heuristic guardrail layer **disabled** (raw model output only). Real-world accuracy is higher because the keyword and safety-rule layers intercept the most obvious high-urgency messages before the model is called.
+`eval_criticality.py` scores models on the 240 labelled messages in [`data/eval/criticality_benchmark.yml`](data/eval/criticality_benchmark.yml) (80 per class, with negation, hearsay, contrast and "safety word" traps). It reports two modes:
 
-| Model | Accuracy | Macro-F1 | CPU latency | Size | Status |
-|---|---|---|---|---|---|
-| **DeBERTa-v3-base-zeroshot-v2.0** | **60.0%** | **58.6%** | ~1500 ms | 184 MB | ✅ Current |
-| BART-large-mnli | 37.5% | 31.6% | ~400 ms | 1.6 GB | ❌ Replaced |
-| DeBERTa-v3-xsmall | ~65–70% | — | ~450 ms | 70 MB | CPU alternative |
-| xtremedistil-l6 | ~50% | — | ~27 ms | 25 MB | Too inaccurate |
+- **raw** — the zero-shot model alone
+- **pipeline** — the production path: keyword guardrails → model → emotion prior → structural rules
 
-**Why DeBERTa-v3-base was chosen over BART:** BART had a severe bias toward predicting "medium" for almost every message (84.6% medium recall, only 15.4% high recall), making it nearly useless for catching genuine escalations. DeBERTa's high-class precision is 88.9% — when it says escalate, it is almost always right.
+Results (2026-10, CPU):
 
-**Per-class breakdown for the current model (DeBERTa-v3-base, heuristics off):**
+| Model | Mode | Accuracy | Macro-F1 | HIGH precision | HIGH recall | LOW→HIGH false alarms |
+|---|---|---|---|---|---|---|
+| **DeBERTa-v3-base** (current) | pipeline | **45.0%** | **44.2%** | **78.1%** | **31.2%** | 4 |
+| DeBERTa-v3-base | raw | 43.3% | 40.9% | 72.0% | 22.5% | 1 |
+| DeBERTa-v3-xsmall | pipeline | 42.1% | 38.6% | 85.7% | 22.5% | 3 |
+| DeBERTa-v3-xsmall | raw | 34.2% | 31.5% | 45.7% | 20.0% | 16 |
 
-| Class | Precision | Recall | F1 | Notes |
-|---|---|---|---|---|
-| LOW | 52.2% | 85.7% | 64.9% | Good at clearing routine queries |
-| MEDIUM | 50.0% | 30.8% | 38.1% | Weakest class; keyword layer compensates |
-| **HIGH** | **88.9%** | **61.5%** | **72.7%** | Most critical — high precision, few false alarms |
+> ⚠️ **Escalation recall is the main open weakness.** In production mode the bot catches about one in three messages that should go to a human (fire, electric shock, account takeover, leaked card numbers). When it does escalate it is usually right (78% precision). Improving this is the top item on the roadmap; treat the current component as a demo, not a safety system.
 
-With the heuristic layer enabled (production default), HIGH recall rises above 90% because safety, finance, and medical keywords are caught before the model runs.
+On the original 40-message thesis set, DeBERTa-v3-base scores 60.0% raw (vs 37.5% for BART-large-mnli, which it replaced). The larger set is harder and more representative. 200 of its 240 labels were drafted in October 2026 and are marked `source: draft` pending human review.
+
+Reproduce:
+
+```bash
+docker compose run --rm --no-deps -v "$PWD":/app -w /app rasa-actions \
+  python eval_criticality.py --show-errors --json results/criticality.json
+```
 
 ### CPU vs GPU latency
 
 | Hardware | Median latency / message | Recommended for |
 |---|---|---|
-| CPU only | ~1500 ms | Development, low-traffic demos (< 5 concurrent users) |
+| CPU only | ~100 ms measured on an 8-core laptop CPU; expect several times more on small cloud instances | Development, low-traffic demos |
 | NVIDIA GPU (e.g. T4) | ~30–50 ms | Production, > 10 concurrent users |
 
-**CPU is usable** for development and low-traffic demos: each user turn is scored once by the action server, so a ~1.5 s criticality pass is added to the bot's reply time. Switch to the xsmall model (below) or a GPU before putting real traffic on it.
+**CPU is usable** for development and low-traffic demos: each user turn is scored once by the action server (emotion + criticality + ABSA), adding roughly 0.1–1 s to the reply depending on the CPU. Measure on your target hardware with `eval_criticality.py` before putting real traffic on it.
 
 **GPU is recommended for production.** At ~40 ms per message the latency is invisible to users regardless of traffic.
 
@@ -200,15 +204,11 @@ docker-compose up --build rasa-actions
 
 ### CPU-only alternative model
 
-If you cannot use a GPU and need faster CPU inference, you can swap to the xsmall variant (~450 ms) by setting one variable in `.env` and restarting `rasa-actions`:
+`MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33` is ~3× smaller, but it is less accurate on the benchmark above (42% vs 45% in pipeline mode, with lower HIGH recall), so it is only worth it if memory is the constraint. Switch by setting one variable in `.env` and restarting `rasa-actions`:
 
 ```bash
 CRITICALITY_MODEL=MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33
 ```
-
-The pipeline API is identical — no other changes required. Note the xsmall accuracy figure above has not yet been measured on the same benchmark as the other rows.
-
----
 
 ## Environment Variables
 
@@ -295,6 +295,31 @@ PATCH {base_url}/orders/{order_id}      → body {"address": "..."}
 ```
 
 Each order object must include: `status`, `eta`, `created_at`, `address`, `email`. See [`integrations/order_provider.py`](integrations/order_provider.py) for the full interface. To integrate a custom backend (Shopify, WooCommerce, SAP), subclass `OrderProvider` and register the new type string in `get_order_provider()`.
+
+---
+
+## Development & Testing
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push and pull request:
+
+| Job | What it checks |
+|---|---|
+| Lint + unit tests | `ruff check .` and `pytest` (~140 tests, no model downloads): criticality guardrails, emotion bucketing, ABSA pairing, validators, order providers, dashboard auth/ingest/rate limiting, form and conversation-risk logic |
+| Rasa dialogue tests | `rasa data validate`, a full `rasa train`, then `rasa test core` on [`tests/test_stories.yml`](tests/test_stories.yml) with `--fail-on-prediction-errors` |
+
+Run the same checks locally with Docker (no local Python setup needed):
+
+```bash
+# Unit tests + lint, in the action-server image
+docker compose run --rm --no-deps -v "$PWD":/app -w /app rasa-actions sh -c \
+  "pip install -q -r requirements/dashboard.txt -r requirements/dev.txt && ruff check . --no-cache && pytest -q"
+
+# Dialogue tests against the latest trained model
+docker compose run --rm --no-deps -v "$PWD/tests":/app/tests rasa \
+  test core --stories tests/test_stories.yml --fail-on-prediction-errors
+```
+
+Dependencies are pinned in [`requirements/`](requirements/) and shared by the Dockerfiles and CI. Test stories are recorded from real conversations and reviewed before they're added; see the header of `tests/test_stories.yml`.
 
 ---
 

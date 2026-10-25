@@ -67,6 +67,8 @@ services:
     environment:
       DASHBOARD_BACKEND_URL: http://dashboard:5001
       GPU_ENABLED: ${GPU_ENABLED:-auto}
+      # Source is bind-mounted; don't leave root-owned __pycache__ in the repo.
+      PYTHONDONTWRITEBYTECODE: "1"
     # ── GPU acceleration (optional) ───────────────────────────────────────────
     # Uncomment the block below to enable GPU access for the AI models.
     # Prerequisites: nvidia-container-toolkit installed on the host, and

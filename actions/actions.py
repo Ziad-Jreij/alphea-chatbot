@@ -8,15 +8,14 @@ import os
 import requests
 import csv
 from rasa_sdk.events import SlotSet, EventType, FollowupAction
-import logging
 from threading import Lock
-from components.emotion import ensure_emotion_pipe, coarse_from_label, top_emotion, map_to_business_emotion
+from components.emotion import ensure_emotion_pipe, coarse_from_label, map_to_business_emotion
 from components.criticality import infer_criticality_for_text
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from components.absa import extract_aspect_opinions
 from integrations.order_provider import get_order_provider
-from integrations.validators import validate_order_id, validate_email, sanitize_address, sanitize_text
+from integrations.validators import validate_order_id, validate_email, sanitize_address
 from observability.logging_config import configure_logging, get_logger
 configure_logging()
 _init_lock = Lock()
@@ -175,8 +174,6 @@ def _infer_emotion_slots(tracker):
     if not text:
         return {}
 
-    intent = tracker.latest_message.get("intent", {}).get("name")
-
     # 1) Emotion
     pipe = _ensure_pipe()
     preds = pipe(text)[0]
@@ -185,7 +182,6 @@ def _infer_emotion_slots(tracker):
     sentiment = _coarse(top_label)
 
     agg = _merge_emotion_aggregate(tracker, top_label)
-    overall = agg.get("overall_emotion")
 
     # 2) Criticality (use emotion as prior for the model)
     crit = _infer_criticality_slots(text, top_label)
@@ -271,21 +267,6 @@ def _infer_criticality_slots(text: str, emotion: Optional[str]) -> Dict[Text, An
     level = (result.get("criticality_level") or "low").lower()
     score = float(result.get("criticality_score") or _CRIT2SCORE.get(level, 0.2))
     escalation = result.get("escalation") or _ESCALATION_MAP.get(level, "none")
-    dist = result.get("distribution") or {}
-    source = result.get("source") or "unknown"
-    kw = result.get("matched_keyword")
-
-    # logger.debug(
-    #     "[crit] text=%r emo=%s -> level=%s score=%.2f escalation=%s source=%s kw=%s dist=%s",
-    #     text,
-    #     (emotion or "none"),
-    #     level,
-    #     score,
-    #     escalation,
-    #     source,
-    #     kw,
-    #     {k: f"{v:.2f}" for k, v in dist.items()},
-    # )
 
     return {
         "criticality_level": level,
@@ -333,7 +314,6 @@ def _update_conversation_risk(
            │   explanation, source, matched_keyword, emotion, conv_score.
            │ The audit log is the backbone of the Escalation Audit Trail output.
     """
-    import json
     from datetime import datetime as _dt
 
     # ── 0) LOAD HISTORY ─────────────────────────────────────────────────────
@@ -356,11 +336,15 @@ def _update_conversation_risk(
     else:
         decay = 0.85   # baseline
 
+    # Each turn contributes the urgency of its LEVEL (_CRIT2SCORE), not its
+    # stored "score": that is the model's confidence in whichever level won,
+    # so a confident LOW (0.80) used to count as high urgency and escalate a
+    # routine "cancel my order" straight to a human.
     w      = 1.0
     total_w = 0.0
     agg    = 0.0
     for item in reversed(history):
-        s = float(item.get("score", 0.0))
+        s = _CRIT2SCORE.get(item.get("level"), _CRIT2SCORE["low"])
         agg    += w * s
         total_w += w
         w      *= decay
@@ -485,7 +469,7 @@ def _merge_emotion_aggregate(tracker, new_label):
     message cannot flip the displayed emotion label. Uses the smooth_emotion()
     function from emotion.py.
     """
-    from components.emotion import smooth_emotion, BUSINESS_EMOTION_DISPLAY
+    from components.emotion import smooth_emotion
 
     tally   = tracker.get_slot("emotion_tally") or {}
     history = list(tracker.get_slot("emotion_history") or [])
@@ -847,7 +831,9 @@ class ValidateDamageReportForm(FormValidationAction):
 
         # If this slot is not actively requested, just keep the current value
         if tracker.get_slot("requested_slot") != "order_id":
-            out["order_id"] = tracker.get_slot("order_id")
+            # Pre-filled (e.g. from the NLU entity): keep it only if valid, otherwise
+            # clear it so the form asks for the ID normally.
+            out["order_id"] = normalize_order_id(tracker.get_slot("order_id"))
             return out
 
         if not value:
@@ -1133,7 +1119,14 @@ class ActionClearContext(Action):
         return "action_clear_context"
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        return clear_context_slots() + [SlotSet("emotion_tally", None), SlotSet("overall_emotion", None)]
+        events = clear_context_slots() + [SlotSet("emotion_tally", None), SlotSet("overall_emotion", None)]
+        # This runs at the start of a new flow, in the same turn as the user's
+        # message. Keep an order ID given in that message ("cancel ORD-12345")
+        # so the form doesn't ask for it again; only stale context is cleared.
+        current_oid = normalize_order_id(next(tracker.get_latest_entity_values("order_id"), None))
+        if current_oid:
+            events.append(SlotSet("order_id", current_oid))
+        return events
 class ActionLookupOrderStatus(Action):
     def name(self) -> Text:
         return "action_lookup_order_status"
@@ -1202,7 +1195,9 @@ class ValidateOrderStatusForm(FormValidationAction):
 
         # If this slot is not actively requested, just keep the current value
         if tracker.get_slot("requested_slot") != "order_id":
-            out["order_id"] = tracker.get_slot("order_id")
+            # Pre-filled (e.g. from the NLU entity): keep it only if valid, otherwise
+            # clear it so the form asks for the ID normally.
+            out["order_id"] = normalize_order_id(tracker.get_slot("order_id"))
             return out
 
         if not value:
@@ -1374,7 +1369,9 @@ class ValidateReturnForm(FormValidationAction):
 
         # If this slot is not actively requested, just keep the current value
         if tracker.get_slot("requested_slot") != "order_id":
-            out["order_id"] = tracker.get_slot("order_id")
+            # Pre-filled (e.g. from the NLU entity): keep it only if valid, otherwise
+            # clear it so the form asks for the ID normally.
+            out["order_id"] = normalize_order_id(tracker.get_slot("order_id"))
             return out
 
         if not value:
@@ -1442,7 +1439,9 @@ class ValidateCancelOrderForm(FormValidationAction):
 
         # If this slot is not actively requested, just keep the current value
         if tracker.get_slot("requested_slot") != "order_id":
-            out["order_id"] = tracker.get_slot("order_id")
+            # Pre-filled (e.g. from the NLU entity): keep it only if valid, otherwise
+            # clear it so the form asks for the ID normally.
+            out["order_id"] = normalize_order_id(tracker.get_slot("order_id"))
             return out
 
         if not value:
@@ -1640,7 +1639,9 @@ class ValidateAddressUpdateForm(FormValidationAction):
 
         # If this slot is not actively requested, just keep the current value
         if tracker.get_slot("requested_slot") != "order_id":
-            out["order_id"] = tracker.get_slot("order_id")
+            # Pre-filled (e.g. from the NLU entity): keep it only if valid, otherwise
+            # clear it so the form asks for the ID normally.
+            out["order_id"] = normalize_order_id(tracker.get_slot("order_id"))
             return out
 
         if not value:

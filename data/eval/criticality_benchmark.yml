@@ -1,0 +1,276 @@
+# Criticality benchmark — labelled customer-service messages.
+#
+# Used by eval_criticality.py. Not training data: nothing here is seen by the
+# model or the guardrails during development, so keep it that way (don't copy
+# these sentences into nlu.yml or criticality_keywords.yml).
+#
+# LABELLING RUBRIC
+#   high    A human should step in now. Physical safety or injury risk; medical
+#           risk; fraud, account takeover or unauthorised money movement;
+#           privacy/data exposure or legal demands (GDPR, legal action,
+#           chargebacks); severe financial loss; vulnerable customer at risk;
+#           repeated unresolved failures with strong distress.
+#   medium  A real problem that needs action, but no immediate harm: late,
+#           missing, wrong or damaged items; refund/billing errors without
+#           fraud; non-safety defects; account access trouble; poor service.
+#   low     Information requests, how-to, praise, routine changes, and
+#           hypothetical or hearsay concerns with no actual incident.
+#
+# source:  thesis  original 40-case set from the thesis evaluation
+#          draft   added in Phase 2 (2026-10), drafted by Claude Code —
+#                  NEEDS HUMAN REVIEW before results are quoted externally
+# tags:    trap categories, reported separately by the eval script
+#          negation, hearsay, question, contrast, safety_word, repeated
+
+cases:
+  # ── thesis set: LOW ──────────────────────────────────────────────────────
+  - {text: "Hi, what are your shipping times to London?", label: low, source: thesis}
+  - {text: "Can I change the color of my order before it ships?", label: low, source: thesis}
+  - {text: "Do you offer gift wrapping?", label: low, source: thesis}
+  - {text: "I just wanted to say thank you, everything arrived perfectly.", label: low, source: thesis}
+  - {text: "What is your return policy?", label: low, source: thesis}
+  - {text: "My order status says processing, is that normal?", label: low, source: thesis}
+  - {text: "Do you ship internationally?", label: low, source: thesis}
+  - {text: "How long does standard delivery take?", label: low, source: thesis}
+  - {text: "I'm wondering if this item is compatible with my phone.", label: low, source: thesis}
+  - {text: "I heard this might be a scam but I'm just checking.", label: low, source: thesis, tags: [hearsay]}
+  - {text: "Everything went smoothly, no complaints at all.", label: low, source: thesis}
+  - {text: "My card was NOT stolen, I'm just checking a charge.", label: low, source: thesis, tags: [negation]}
+  - {text: "I want to return an item — it just isn't the right size.", label: low, source: thesis}
+  - {text: "I accidentally ordered two, can you cancel one?", label: low, source: thesis}
+
+  # ── thesis set: MEDIUM ───────────────────────────────────────────────────
+  - {text: "My package is 3 days late, can you look into this?", label: medium, source: thesis}
+  - {text: "I received the wrong item in my order.", label: medium, source: thesis}
+  - {text: "The item I got is slightly different from what was shown online.", label: medium, source: thesis}
+  - {text: "I've been waiting a week for a refund and haven't heard anything.", label: medium, source: thesis}
+  - {text: "I ordered two items but only received one.", label: medium, source: thesis}
+  - {text: "The packaging was damaged when it arrived, but the product looks okay.", label: medium, source: thesis, tags: [contrast]}
+  - {text: "I need to change my delivery address, the order hasn't shipped yet.", label: medium, source: thesis}
+  - {text: "The app keeps showing an error when I try to track my order.", label: medium, source: thesis}
+  - {text: "My discount code didn't apply at checkout even though it should be valid.", label: medium, source: thesis}
+  - {text: "I emailed support two days ago and haven't gotten a reply.", label: medium, source: thesis}
+  - {text: "I'm not saying there's fraud, just a charge I don't recognise.", label: medium, source: thesis, tags: [negation]}
+  - {text: "The product is okay but the customer service was really disappointing.", label: medium, source: thesis, tags: [contrast]}
+  - {text: "I've been a loyal customer for years and this experience has been terrible.", label: medium, source: thesis}
+
+  # ── thesis set: HIGH ─────────────────────────────────────────────────────
+  - {text: "My card was charged twice and I need this fixed immediately!", label: high, source: thesis}
+  - {text: "The device started smoking and I turned it off — is this a safety issue?", label: high, source: thesis}
+  - {text: "I've reported this problem four times and no one is helping me.", label: high, source: thesis, tags: [repeated]}
+  - {text: "Someone made a purchase on my account that I did not authorise.", label: high, source: thesis}
+  - {text: "I think my account has been hacked, please help urgently.", label: high, source: thesis}
+  - {text: "The product caught fire and I had to throw it out the window!", label: high, source: thesis}
+  - {text: "I'm extremely frustrated — this is the third time you've sent the wrong order.", label: high, source: thesis, tags: [repeated]}
+  - {text: "I received medication with the wrong dosage label on it.", label: high, source: thesis}
+  - {text: "There's an unauthorized charge of $400 on my account from yesterday.", label: high, source: thesis}
+  - {text: "My child almost swallowed a small part that fell off your product.", label: high, source: thesis}
+  - {text: "The delivery was fine but the product stopped working after one day.", label: high, source: thesis, tags: [contrast]}
+  - {text: "I've contacted you three times about a missing refund with no response.", label: high, source: thesis, tags: [repeated]}
+  - {text: "Your app keeps crashing every time I open the checkout page.", label: high, source: thesis}
+
+  # ── draft set: LOW ───────────────────────────────────────────────────────
+  - {text: "Can I pay with PayPal?", label: low, source: draft}
+  - {text: "What sizes does this jacket come in?", label: low, source: draft}
+  - {text: "Is there a student discount?", label: low, source: draft}
+  - {text: "How do I update my newsletter preferences?", label: low, source: draft}
+  - {text: "Do you have a physical store in Nicosia?", label: low, source: draft}
+  - {text: "What are your opening hours on Sunday?", label: low, source: draft}
+  - {text: "Can I track my order without an account?", label: low, source: draft}
+  - {text: "Is this laptop available in silver?", label: low, source: draft}
+  - {text: "How do I reset my password?", label: low, source: draft}
+  - {text: "Can I add a gift message to my order?", label: low, source: draft}
+  - {text: "What's the warranty period on the headphones?", label: low, source: draft}
+  - {text: "Do you price match other retailers?", label: low, source: draft}
+  - {text: "Thanks, that answered my question!", label: low, source: draft}
+  - {text: "Great service, the courier was very polite.", label: low, source: draft}
+  - {text: "How do I use a promo code?", label: low, source: draft}
+  - {text: "Can I change my delivery time slot?", label: low, source: draft}
+  - {text: "Is express shipping available to Limassol?", label: low, source: draft}
+  - {text: "Do you sell replacement chargers for this model?", label: low, source: draft}
+  - {text: "What payment methods do you accept?", label: low, source: draft}
+  - {text: "Can I return an item bought on sale?", label: low, source: draft}
+  - {text: "How long do refunds usually take to show up?", label: low, source: draft}
+  - {text: "I'd like to know if this product comes with batteries.", label: low, source: draft}
+  - {text: "Is the blender dishwasher safe?", label: low, source: draft}
+  - {text: "When will the blue version be back in stock?", label: low, source: draft}
+  - {text: "Do I need to print the return label?", label: low, source: draft}
+  - {text: "Can I pick up my order from a parcel locker?", label: low, source: draft}
+  - {text: "What does 'dispatched' mean on my tracking page?", label: low, source: draft}
+  - {text: "I love the new design of your app.", label: low, source: draft}
+  - {text: "Could you tell me how to change the email address on my account?", label: low, source: draft}
+  - {text: "Just checking: does the order include the user manual?", label: low, source: draft}
+  - {text: "My parcel arrived early, thank you!", label: low, source: draft}
+  - {text: "Can I buy a gift card for a friend?", label: low, source: draft}
+  - {text: "Do you offer installation for washing machines?", label: low, source: draft}
+  - {text: "Is it possible to order in bulk for my office?", label: low, source: draft}
+  - {text: "What's the difference between the Pro and Lite models?", label: low, source: draft}
+  - {text: "Do you deliver on public holidays?", label: low, source: draft}
+  - {text: "How do I leave a product review?", label: low, source: draft}
+  - {text: "Is the price including VAT?", label: low, source: draft}
+  - {text: "Where can I find my invoice?", label: low, source: draft}
+  - {text: "I heard there was a data breach at some company, are you affected?", label: low, source: draft, tags: [hearsay]}
+  - {text: "Is it safe to charge this phone overnight?", label: low, source: draft, tags: [question, safety_word]}
+  - {text: "What happens if my card expires before the subscription renews?", label: low, source: draft, tags: [question]}
+  - {text: "Do you check for fraud on large orders?", label: low, source: draft, tags: [question]}
+  - {text: "My friend said your site is a scam, is that true?", label: low, source: draft, tags: [hearsay]}
+  - {text: "Not urgent at all, but can you resend my receipt?", label: low, source: draft}
+  - {text: "Is this candle smoke-free?", label: low, source: draft, tags: [safety_word]}
+  - {text: "The battery life is great, it lasts all day.", label: low, source: draft}
+  - {text: "How do I pair the earbuds with my laptop?", label: low, source: draft}
+  - {text: "Can you recommend a case for this phone?", label: low, source: draft}
+  - {text: "Do you have this shoe in a wide fit?", label: low, source: draft}
+  - {text: "Is there a fee for returns?", label: low, source: draft}
+  - {text: "How can I contact your sales team?", label: low, source: draft}
+  - {text: "Can I schedule delivery for next week instead?", label: low, source: draft}
+  - {text: "Just wanted to say the support agent yesterday was excellent.", label: low, source: draft}
+  - {text: "Will my order ship together or in separate boxes?", label: low, source: draft}
+  - {text: "What's your policy on price drops after purchase?", label: low, source: draft}
+  - {text: "Can I change the name on the order?", label: low, source: draft}
+  - {text: "Is the product made in the EU?", label: low, source: draft}
+  - {text: "How do I unsubscribe from SMS updates?", label: low, source: draft}
+  - {text: "Are your products cruelty-free?", label: low, source: draft}
+  - {text: "I received a survey email, is it really from you?", label: low, source: draft, tags: [question]}
+  - {text: "What's the maximum weight the shelf can hold?", label: low, source: draft}
+  - {text: "Can I combine two discount codes?", label: low, source: draft}
+  - {text: "My order was not damaged at all, everything is perfect.", label: low, source: draft, tags: [negation]}
+  - {text: "There was no unauthorized charge, I just want a copy of the invoice.", label: low, source: draft, tags: [negation]}
+  - {text: "Can I cancel my newsletter subscription?", label: low, source: draft}
+
+  # ── draft set: MEDIUM ────────────────────────────────────────────────────
+  - {text: "My order was supposed to arrive yesterday and it still hasn't come.", label: medium, source: draft}
+  - {text: "The tracking hasn't updated in five days.", label: medium, source: draft}
+  - {text: "I received a blue sweater but I ordered a red one.", label: medium, source: draft}
+  - {text: "The screen protector arrived cracked.", label: medium, source: draft}
+  - {text: "One of the glasses in the set was broken.", label: medium, source: draft}
+  - {text: "My refund was approved two weeks ago but I still don't have the money.", label: medium, source: draft}
+  - {text: "I was charged for shipping even though I have free delivery.", label: medium, source: draft}
+  - {text: "The coupon was applied but the total didn't change.", label: medium, source: draft}
+  - {text: "I can't log into my account, the reset email never arrives.", label: medium, source: draft}
+  - {text: "The size chart was wrong, the shoes are two sizes too small.", label: medium, source: draft}
+  - {text: "The courier left my parcel at the wrong address.", label: medium, source: draft}
+  - {text: "My package says delivered but I never got it.", label: medium, source: draft}
+  - {text: "The product doesn't match the description at all.", label: medium, source: draft}
+  - {text: "I was promised a callback yesterday and nobody called.", label: medium, source: draft}
+  - {text: "The assembly instructions are missing from the box.", label: medium, source: draft}
+  - {text: "The headphones only work on one side.", label: medium, source: draft}
+  - {text: "My order was cancelled without any explanation.", label: medium, source: draft}
+  - {text: "I returned the item ten days ago and haven't heard anything.", label: medium, source: draft}
+  - {text: "The colour is much darker than the photos on the website.", label: medium, source: draft}
+  - {text: "Your website keeps logging me out when I try to pay.", label: medium, source: draft}
+  - {text: "I'm missing a part from my furniture order.", label: medium, source: draft}
+  - {text: "The invoice shows the wrong company name, I need it corrected for my accounts.", label: medium, source: draft}
+  - {text: "I was charged the full price instead of the sale price.", label: medium, source: draft}
+  - {text: "The delivery driver was rude and threw the package.", label: medium, source: draft}
+  - {text: "My subscription renewed even though I cancelled it last month.", label: medium, source: draft}
+  - {text: "The order has been stuck on 'processing' for over a week.", label: medium, source: draft}
+  - {text: "I got someone else's order in my box.", label: medium, source: draft}
+  - {text: "The zipper broke the first time I used the bag.", label: medium, source: draft}
+  - {text: "The return label you sent doesn't work at the post office.", label: medium, source: draft}
+  - {text: "Customer support closed my ticket without solving the problem.", label: medium, source: draft}
+  - {text: "I've been on hold for 40 minutes, this is really annoying.", label: medium, source: draft}
+  - {text: "The warranty replacement still hasn't been shipped.", label: medium, source: draft}
+  - {text: "The app crashed and my cart was emptied.", label: medium, source: draft}
+  - {text: "I paid for express shipping but it's taking as long as standard.", label: medium, source: draft}
+  - {text: "The product smells strongly of chemicals.", label: medium, source: draft}
+  - {text: "My gift order arrived without the gift wrapping I paid for.", label: medium, source: draft}
+  - {text: "The tracking number you gave me doesn't exist.", label: medium, source: draft}
+  - {text: "I can't apply my gift card balance at checkout.", label: medium, source: draft}
+  - {text: "My loyalty points disappeared from my account.", label: medium, source: draft}
+  - {text: "The replacement you sent has the same defect.", label: medium, source: draft}
+  - {text: "You sent me two invoices for the same order.", label: medium, source: draft}
+  - {text: "The item went out of stock after I paid, and I want my money back.", label: medium, source: draft}
+  - {text: "I need my order before Friday for a birthday and it still hasn't shipped.", label: medium, source: draft}
+  - {text: "The sofa delivery has been rescheduled three times.", label: medium, source: draft}
+  - {text: "My account shows an order I already returned as not returned.", label: medium, source: draft}
+  - {text: "The vacuum is much louder than advertised.", label: medium, source: draft}
+  - {text: "The washing machine leaks a little water during the spin cycle.", label: medium, source: draft}
+  - {text: "Live chat disconnected me twice in the middle of my question.", label: medium, source: draft}
+  - {text: "I was told my refund would be processed in 3 days, it's been 10.", label: medium, source: draft}
+  - {text: "The product arrived but the box was soaking wet.", label: medium, source: draft}
+  - {text: "My promo code says expired but the email says it's valid until Sunday.", label: medium, source: draft, tags: [safety_word]}
+  - {text: "I received the wrong size and the exchange option isn't showing.", label: medium, source: draft}
+  - {text: "The online price and the price on my receipt are different.", label: medium, source: draft}
+  - {text: "I was home all day but the driver claims nobody answered the door.", label: medium, source: draft}
+  - {text: "Your email says my order shipped but tracking only shows 'label created'.", label: medium, source: draft}
+  - {text: "It's not a big deal, but the item has a scratch on the front.", label: medium, source: draft, tags: [negation]}
+  - {text: "My order arrived without the charger.", label: medium, source: draft}
+  - {text: "My monthly bill went up and nobody told me why.", label: medium, source: draft}
+  - {text: "Two keys on the laptop keyboard don't work.", label: medium, source: draft}
+  - {text: "I keep getting an error when I try to update my address.", label: medium, source: draft}
+  - {text: "The courier wants me to pay customs fees nobody mentioned.", label: medium, source: draft}
+  - {text: "The mattress has a strong odour and a stain on one side.", label: medium, source: draft}
+  - {text: "I've asked twice for an invoice and still don't have it.", label: medium, source: draft}
+  - {text: "My return was rejected even though the item was unused.", label: medium, source: draft}
+  - {text: "The chat bot keeps sending me in circles.", label: medium, source: draft}
+  - {text: "The item arrived a week late and the box was crushed.", label: medium, source: draft}
+  - {text: "I'm disappointed, the quality is much worse than before.", label: medium, source: draft}
+
+  # ── draft set: HIGH ──────────────────────────────────────────────────────
+  - {text: "There are three payments on my card that I never made.", label: high, source: draft}
+  - {text: "Someone changed the email on my account and now I can't get in.", label: high, source: draft}
+  - {text: "My charger started sparking when I plugged it in.", label: high, source: draft}
+  - {text: "The heater burned my hand, the casing got extremely hot.", label: high, source: draft}
+  - {text: "I got an electric shock from the kettle.", label: high, source: draft}
+  - {text: "My child had an allergic reaction after using the cream.", label: high, source: draft}
+  - {text: "The pills in the bottle are not what the label says.", label: high, source: draft}
+  - {text: "I think someone is using my saved card to order things.", label: high, source: draft}
+  - {text: "I got a phishing email with your logo and I entered my password.", label: high, source: draft}
+  - {text: "Delete all my personal data immediately, I'm invoking my GDPR rights.", label: high, source: draft}
+  - {text: "I'm going to take legal action if this isn't resolved today.", label: high, source: draft}
+  - {text: "The e-bike battery has swollen up and is making a hissing sound.", label: high, source: draft}
+  - {text: "The baby car seat strap snapped while I was driving.", label: high, source: draft}
+  - {text: "The ladder collapsed under me and I hurt my back.", label: high, source: draft}
+  - {text: "My bank flagged a fraudulent transaction from your store.", label: high, source: draft}
+  - {text: "Your website showed me another customer's address and phone number.", label: high, source: draft}
+  - {text: "I was charged 1,200 euros instead of 120.", label: high, source: draft}
+  - {text: "Someone else spent the gift card balance on my account.", label: high, source: draft}
+  - {text: "The power bank exploded on my desk.", label: high, source: draft}
+  - {text: "There's smoke coming out of the TV.", label: high, source: draft}
+  - {text: "I'm diabetic and my insulin cooler arrived broken, the insulin is warm.", label: high, source: draft}
+  - {text: "The medicine you shipped expired last year.", label: high, source: draft}
+  - {text: "I've called five times this week about my broken fridge and all my food is spoiling.", label: high, source: draft, tags: [repeated]}
+  - {text: "This is the fourth time I'm writing, I've lost all patience and want a manager now.", label: high, source: draft, tags: [repeated]}
+  - {text: "My elderly mother is being charged for a subscription she never signed up for.", label: high, source: draft}
+  - {text: "The toy has sharp metal edges and my son cut his finger.", label: high, source: draft}
+  - {text: "The wiring in the lamp is exposed.", label: high, source: draft}
+  - {text: "I can smell burning plastic coming from the dryer.", label: high, source: draft}
+  - {text: "The gas stove you installed is leaking gas.", label: high, source: draft}
+  - {text: "Someone hacked my account and placed an order to a different address.", label: high, source: draft}
+  - {text: "I never received my 900 euro refund and you've ignored me for a month.", label: high, source: draft, tags: [repeated]}
+  - {text: "The courier delivered my new bank cards to the wrong house.", label: high, source: draft}
+  - {text: "I got a password reset I didn't request and then my orders were cancelled.", label: high, source: draft}
+  - {text: "My card was saved on your site and now there are charges from abroad.", label: high, source: draft}
+  - {text: "The scooter's brakes failed going downhill.", label: high, source: draft}
+  - {text: "The meal kit contained nuts even though it was labelled nut-free, and my child is allergic.", label: high, source: draft}
+  - {text: "Money keeps disappearing from my wallet balance on your site.", label: high, source: draft}
+  - {text: "The hoverboard caught fire while charging in my kid's room.", label: high, source: draft}
+  - {text: "Your order confirmation email shows my full credit card number.", label: high, source: draft}
+  - {text: "I want to report a seller on your platform selling counterfeit medicine.", label: high, source: draft}
+  - {text: "My account was locked after someone tried to log in from another country.", label: high, source: draft}
+  - {text: "Three weeks waiting for a refund, six emails, no reply — I'm furious.", label: high, source: draft, tags: [repeated]}
+  - {text: "The dog food you sold made my dog seriously ill, the vet says it's contaminated.", label: high, source: draft}
+  - {text: "I'm being charged every day for a trial I cancelled and it's draining my account.", label: high, source: draft}
+  - {text: "The microwave keeps running even when the door is open.", label: high, source: draft}
+  - {text: "There's mould inside the sealed baby formula.", label: high, source: draft}
+  - {text: "Someone claiming to be your support asked me for my card PIN.", label: high, source: draft}
+  - {text: "I'm disabled and housebound, and my medical supplies delivery is missing.", label: high, source: draft}
+  - {text: "I will dispute every charge with my bank and report you to consumer protection.", label: high, source: draft}
+  - {text: "The power strip melted and blackened the wall socket.", label: high, source: draft}
+  - {text: "Our office order of 30 laptops arrived as empty boxes.", label: high, source: draft}
+  - {text: "Someone used my identity to open an account on your site.", label: high, source: draft}
+  - {text: "You gave my home address to a seller who is now messaging me.", label: high, source: draft}
+  - {text: "The bike helmet cracked on first use from a light bump.", label: high, source: draft}
+  - {text: "It looked fine at first, but then the charger started smoking.", label: high, source: draft, tags: [contrast]}
+  - {text: "The packaging was nice, however the bleach bottle leaked all over the kids' toys.", label: high, source: draft, tags: [contrast]}
+  - {text: "The product works, but it gave me an electric shock when I touched the metal part.", label: high, source: draft, tags: [contrast]}
+  - {text: "Delivery was fast but the cot is missing its safety bolts and wobbles.", label: high, source: draft, tags: [contrast]}
+  - {text: "You charged my card after I deleted my account — that's unauthorised.", label: high, source: draft}
+  - {text: "I got an email saying my password was changed and it wasn't me.", label: high, source: draft}
+  - {text: "This is unacceptable, I've been charged for 10 orders I never placed.", label: high, source: draft}
+  - {text: "The pressure cooker lid blew off while I was cooking.", label: high, source: draft}
+  - {text: "The cleaning product burned my skin even though I followed the instructions.", label: high, source: draft}
+  - {text: "Please help, someone is threatening me through your seller messaging system.", label: high, source: draft}
+  - {text: "My prescription glasses came with the wrong prescription and I get headaches while driving.", label: high, source: draft}
+  - {text: "Your recall notice says my car seat is dangerous but I can't get a replacement.", label: high, source: draft}
+  - {text: "The phone battery you sold me is bulging and hot.", label: high, source: draft}

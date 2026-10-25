@@ -1,64 +1,503 @@
-#### End-to-end test stories — all intents/actions must exist in domain.yml
+# End-to-end test stories (run: rasa test core --stories tests/test_stories.yml)
+#
+# Recorded from real conversations against the running bot, reviewed for
+# correctness, then trimmed to the events that drive dialogue prediction.
+# Regenerate with care: a story only belongs here if its behaviour is right.
 
+version: '3.1'
 stories:
-
-- story: greet and goodbye
+- story: greeting shows the welcome menu
   steps:
-  - user: |
-      hello
-    intent: greet
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - slot_was_set:
+    - top_emotion: null
+  - slot_was_set:
+    - sentiment: null
+  - intent: greet
+    user: hello
   - action: utter_greet
-  - user: |
-      bye
-    intent: goodbye
-  - action: utter_goodbye
-
-- story: bot challenge
+  - action: utter_welcome_menu
+- story: refund policy FAQ
   steps:
-  - user: |
-      are you a bot?
-    intent: bot_challenge
-  - action: utter_iamabot
-
-- story: ask order status without order id
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - slot_was_set:
+    - top_emotion: null
+  - slot_was_set:
+    - sentiment: null
+  - intent: refund_policy
+    user: what is your refund policy?
+  - action: action_set_primary_intent
+  - action: action_infer_emotion
+  - slot_was_set:
+    - top_emotion: curiosity
+  - slot_was_set:
+    - sentiment: ambiguous
+  - action: action_update_conversation_risk
+  - slot_was_set:
+    - criticality_level: low
+  - slot_was_set:
+    - escalation: none
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - action: action_push_state_to_dashboard
+  - action: utter_faq_refund_window
+  - action: utter_ask_conversation_feedback
+- story: shipping times FAQ
   steps:
-  - user: |
-      where is my order?
-    intent: ask_order_status
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - slot_was_set:
+    - top_emotion: null
+  - slot_was_set:
+    - sentiment: null
+  - intent: shipping_times
+    user: how long does shipping take?
+  - action: action_set_primary_intent
+  - action: action_infer_emotion
+  - slot_was_set:
+    - top_emotion: curiosity
+  - slot_was_set:
+    - sentiment: ambiguous
+  - action: action_update_conversation_risk
+  - slot_was_set:
+    - criticality_level: low
+  - slot_was_set:
+    - escalation: none
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - action: action_push_state_to_dashboard
+  - action: utter_shipping_times
+  - action: utter_ask_conversation_feedback
+- story: order status with the ID in the first message (regression)
+  steps:
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - slot_was_set:
+    - top_emotion: null
+  - slot_was_set:
+    - sentiment: null
+  - intent: ask_order_status
+    user: where is my order [ORD-12345](order_id)
+  - slot_was_set:
+    - order_id: ORD-12345
+  - action: action_set_primary_intent
+  - action: action_infer_emotion
+  - slot_was_set:
+    - top_emotion: confusion
+  - slot_was_set:
+    - sentiment: ambiguous
+  - action: action_update_conversation_risk
+  - slot_was_set:
+    - criticality_level: medium
+  - slot_was_set:
+    - escalation: potential
+  - slot_was_set:
+    - conversation_criticality: medium
+  - slot_was_set:
+    - conversation_escalation: potential
+  - action: action_push_state_to_dashboard
   - action: order_status_form
   - active_loop: order_status_form
-
-- story: talk to human escalation
+  - slot_was_set:
+    - order_id: ORD-12345
+  - slot_was_set:
+    - top_emotion: confusion
+  - slot_was_set:
+    - sentiment: ambiguous
+  - slot_was_set:
+    - criticality_level: medium
+  - slot_was_set:
+    - escalation: potential
+  - slot_was_set:
+    - conversation_criticality: medium
+  - slot_was_set:
+    - conversation_escalation: potential
+  - active_loop: null
+  - action: action_lookup_order_status
+  - action: utter_ask_conversation_feedback
+- story: order status, ID given when asked
   steps:
-  - user: |
-      I want to speak with a real person
-    intent: talk_to_human
-  - action: action_escalate_to_human
-
-- story: refund policy inquiry
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - slot_was_set:
+    - top_emotion: null
+  - slot_was_set:
+    - sentiment: null
+  - intent: ask_order_status
+    user: where is my order
+  - action: action_set_primary_intent
+  - action: action_infer_emotion
+  - slot_was_set:
+    - top_emotion: confusion
+  - slot_was_set:
+    - sentiment: ambiguous
+  - action: action_update_conversation_risk
+  - slot_was_set:
+    - criticality_level: medium
+  - slot_was_set:
+    - escalation: potential
+  - slot_was_set:
+    - conversation_criticality: medium
+  - slot_was_set:
+    - conversation_escalation: potential
+  - action: action_push_state_to_dashboard
+  - action: order_status_form
+  - active_loop: order_status_form
+  - intent: ask_order_status
+    user: '[ORD-12345](order_id)'
+  - slot_was_set:
+    - order_id: ORD-12345
+  - action: order_status_form
+  - slot_was_set:
+    - order_id: ORD-12345
+  - slot_was_set:
+    - top_emotion: curiosity
+  - slot_was_set:
+    - sentiment: ambiguous
+  - slot_was_set:
+    - criticality_level: low
+  - slot_was_set:
+    - escalation: none
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - active_loop: null
+  - action: action_lookup_order_status
+  - action: utter_ask_conversation_feedback
+- story: order status, invalid ID then valid ID
   steps:
-  - user: |
-      what is your refund policy?
-    intent: refund_policy
-  - action: utter_refund_policy
-
-- story: shipping times inquiry
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - slot_was_set:
+    - top_emotion: null
+  - slot_was_set:
+    - sentiment: null
+  - intent: ask_order_status
+    user: where is my order
+  - action: action_set_primary_intent
+  - action: action_infer_emotion
+  - slot_was_set:
+    - top_emotion: confusion
+  - slot_was_set:
+    - sentiment: ambiguous
+  - action: action_update_conversation_risk
+  - slot_was_set:
+    - criticality_level: medium
+  - slot_was_set:
+    - escalation: potential
+  - slot_was_set:
+    - conversation_criticality: medium
+  - slot_was_set:
+    - conversation_escalation: potential
+  - action: action_push_state_to_dashboard
+  - action: order_status_form
+  - active_loop: order_status_form
+  - intent: ask_order_status
+    user: '[ORD-1](order_id)'
+  - slot_was_set:
+    - order_id: ORD-1
+  - action: order_status_form
+  - slot_was_set:
+    - order_id: null
+  - slot_was_set:
+    - top_emotion: curiosity
+  - slot_was_set:
+    - sentiment: ambiguous
+  - slot_was_set:
+    - criticality_level: low
+  - slot_was_set:
+    - escalation: none
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - intent: ask_order_status
+    user: '[ORD-98765](order_id)'
+  - slot_was_set:
+    - order_id: ORD-98765
+  - action: order_status_form
+  - slot_was_set:
+    - order_id: ORD-98765
+  - slot_was_set:
+    - top_emotion: curiosity
+  - slot_was_set:
+    - sentiment: ambiguous
+  - slot_was_set:
+    - criticality_level: low
+  - slot_was_set:
+    - escalation: none
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - active_loop: null
+  - action: action_lookup_order_status
+  - action: utter_ask_conversation_feedback
+- story: handoff request interrupts the order status form (regression)
   steps:
-  - user: |
-      how long does shipping take?
-    intent: shipping_times
-  - action: utter_shipping_times
-
-- story: out of scope general
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - slot_was_set:
+    - top_emotion: null
+  - slot_was_set:
+    - sentiment: null
+  - intent: ask_order_status
+    user: where is my order
+  - action: action_set_primary_intent
+  - action: action_infer_emotion
+  - slot_was_set:
+    - top_emotion: confusion
+  - slot_was_set:
+    - sentiment: ambiguous
+  - action: action_update_conversation_risk
+  - slot_was_set:
+    - criticality_level: medium
+  - slot_was_set:
+    - escalation: potential
+  - slot_was_set:
+    - conversation_criticality: medium
+  - slot_was_set:
+    - conversation_escalation: potential
+  - action: action_push_state_to_dashboard
+  - action: order_status_form
+  - active_loop: order_status_form
+  - intent: talk_to_human
+    user: I want to talk to a human
+  - action: action_deactivate_loop
+  - active_loop: null
+  - action: action_infer_emotion
+  - slot_was_set:
+    - top_emotion: desire
+  - slot_was_set:
+    - sentiment: neutral
+  - action: action_update_conversation_risk
+  - slot_was_set:
+    - criticality_level: medium
+  - slot_was_set:
+    - escalation: potential
+  - slot_was_set:
+    - conversation_criticality: medium
+  - slot_was_set:
+    - conversation_escalation: potential
+  - action: action_request_handoff
+  - action: action_push_state_to_dashboard
+  - action: utter_handoff_ack
+- story: handoff request interrupts the return form (regression)
   steps:
-  - user: |
-      can you recommend a good movie?
-    intent: out_of_scope_general
-  - action: utter_out_of_scope
-
-- story: product positive feedback
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - slot_was_set:
+    - top_emotion: null
+  - slot_was_set:
+    - sentiment: null
+  - intent: start_return
+    user: I want to return an item
+  - action: action_set_primary_intent
+  - action: action_infer_emotion
+  - slot_was_set:
+    - top_emotion: desire
+  - slot_was_set:
+    - sentiment: neutral
+  - action: action_update_conversation_risk
+  - slot_was_set:
+    - criticality_level: low
+  - slot_was_set:
+    - escalation: none
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - action: action_push_state_to_dashboard
+  - action: return_form
+  - active_loop: return_form
+  - intent: ask_order_status
+    user: '[ORD-12345](order_id)'
+  - slot_was_set:
+    - order_id: ORD-12345
+  - action: return_form
+  - slot_was_set:
+    - order_id: ORD-12345
+  - slot_was_set:
+    - top_emotion: curiosity
+  - slot_was_set:
+    - sentiment: ambiguous
+  - slot_was_set:
+    - criticality_level: low
+  - slot_was_set:
+    - escalation: none
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - intent: talk_to_human
+    user: can I speak to a real person
+  - action: action_deactivate_loop
+  - active_loop: null
+  - action: action_infer_emotion
+  - slot_was_set:
+    - top_emotion: curiosity
+  - slot_was_set:
+    - sentiment: ambiguous
+  - action: action_update_conversation_risk
+  - slot_was_set:
+    - criticality_level: medium
+  - slot_was_set:
+    - escalation: potential
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - action: action_request_handoff
+  - action: action_push_state_to_dashboard
+  - action: utter_handoff_ack
+- story: cancel with the ID in the first message, then confirm (regression)
   steps:
-  - user: |
-      I love this product!
-    intent: product_feedback_positive
-  - action: utter_thanks_positive_feedback
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - slot_was_set:
+    - top_emotion: null
+  - slot_was_set:
+    - sentiment: null
+  - intent: cancel_order
+    user: I want to cancel order [ORD-98765](order_id)
+  - slot_was_set:
+    - order_id: ORD-98765
+  - action: action_set_primary_intent
+  - action: action_infer_emotion
+  - slot_was_set:
+    - top_emotion: desire
+  - slot_was_set:
+    - sentiment: neutral
+  - action: action_update_conversation_risk
+  - slot_was_set:
+    - criticality_level: low
+  - slot_was_set:
+    - escalation: none
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - action: action_push_state_to_dashboard
+  - action: action_clear_context
+  - slot_was_set:
+    - order_id: null
+  - slot_was_set:
+    - email: null
+  - slot_was_set:
+    - order_id: ORD-98765
+  - action: cancel_order_form
+  - active_loop: cancel_order_form
+  - slot_was_set:
+    - order_id: ORD-98765
+  - slot_was_set:
+    - top_emotion: desire
+  - slot_was_set:
+    - sentiment: neutral
+  - slot_was_set:
+    - criticality_level: low
+  - slot_was_set:
+    - escalation: none
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - intent: affirm
+    user: 'yes'
+  - slot_was_set:
+    - confirm_cancel: true
+  - action: cancel_order_form
+  - slot_was_set:
+    - confirm_cancel: true
+  - active_loop: null
+  - action: action_cancel_order
+  - slot_was_set:
+    - order_id: null
+  - slot_was_set:
+    - email: null
+  - action: utter_ask_conversation_feedback
+- story: direct handoff request
+  steps:
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - slot_was_set:
+    - top_emotion: null
+  - slot_was_set:
+    - sentiment: null
+  - intent: talk_to_human
+    user: I want to talk to a human
+  - action: action_set_primary_intent
+  - action: action_infer_emotion
+  - slot_was_set:
+    - top_emotion: desire
+  - slot_was_set:
+    - sentiment: neutral
+  - action: action_update_conversation_risk
+  - slot_was_set:
+    - criticality_level: medium
+  - slot_was_set:
+    - escalation: potential
+  - slot_was_set:
+    - conversation_criticality: medium
+  - slot_was_set:
+    - conversation_escalation: potential
+  - action: action_push_state_to_dashboard
+  - action: action_request_handoff
+  - action: action_push_state_to_dashboard
+  - action: utter_handoff_ack
+- story: out-of-scope request mentioning 'good' (regression)
+  steps:
+  - slot_was_set:
+    - conversation_criticality: low
+  - slot_was_set:
+    - conversation_escalation: none
+  - slot_was_set:
+    - top_emotion: null
+  - slot_was_set:
+    - sentiment: null
+  - intent: out_of_scope_general
+    user: could you recommend a good TV show?
+  - action: action_set_primary_intent
+  - action: action_infer_emotion
+  - slot_was_set:
+    - top_emotion: curiosity
+  - slot_was_set:
+    - sentiment: ambiguous
+  - action: action_update_conversation_risk
+  - slot_was_set:
+    - criticality_level: medium
+  - slot_was_set:
+    - escalation: potential
+  - slot_was_set:
+    - conversation_criticality: medium
+  - slot_was_set:
+    - conversation_escalation: potential
+  - action: action_push_state_to_dashboard
+  - action: utter_oos_generic
+  - action: utter_welcome_menu

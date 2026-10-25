@@ -28,7 +28,10 @@ import logging
 import math
 import re
 from threading import Lock
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    import numpy as np
 
 from components.emotion import coarse_from_label  # global sentiment fallback
 
@@ -657,7 +660,7 @@ _OPINION_SEEDS: Dict[str, List[str]] = {
         "disappointing", "frustrating", "hate it", "do not like", "unhappy",
         "angry", "furious", "upset", "slow", "laggy", "buggy", "crashing",
         "freezing", "broken", "not working", "damaged", "late", "delayed",
-        "rude", "unhelpful", "overpriced", "too expensive", "unfair",
+        "rude", "unhelpful", "overpriced", "too expensive", "too high", "unfair",
         "confusing", "hard to use", "difficult", "annoying", "dangerous",
         "not safe", "charged twice", "billing error", "unauthorized charge",
     ],
@@ -716,7 +719,6 @@ def _ensure_emb_model():
 def _precompute_embeddings():
     """Pre-compute all anchor and seed embeddings once at load time."""
     global _ASPECT_ANCHOR_EMBS, _OPINION_SEED_EMBS, _OPINION_SEED_LABELS
-    import numpy as np
 
     # Aspect anchors
     for spec in ASPECT_SPECS:
@@ -927,8 +929,6 @@ def _find_aspects_by_embedding(text: str) -> List[Dict]:
     if model is None or not _ASPECT_ANCHOR_EMBS:
         return []
 
-    import numpy as np
-
     text_vec = model.encode(text, convert_to_numpy=True, normalize_embeddings=True)
 
     results: List[Dict] = []
@@ -972,8 +972,6 @@ def _find_opinion_by_embedding(text: str) -> Optional[Dict]:
     if model is None or not _OPINION_SEED_EMBS:
         return None
 
-    import numpy as np
-
     text_vec = model.encode(text, convert_to_numpy=True, normalize_embeddings=True)
 
     best_pol: Optional[str] = None
@@ -1009,6 +1007,18 @@ _NEG_CONTEXT_HINTS = [
     "slow", "lags", "laggy", "freezes", "crashes", "buggy",
     "unhelpful", "rude", "late", "delayed",
 ]
+
+
+def _contrast_clause_starts(text: str) -> List[int]:
+    """Char offsets where a new contrast clause begins (after "but", ...)."""
+    text_lc = text.lower()
+    starts = []
+    for marker in _CONTRAST_MARKERS:
+        idx = text_lc.find(marker)
+        while idx != -1:
+            starts.append(idx + len(marker))
+            idx = text_lc.find(marker, idx + 1)
+    return sorted(starts)
 
 
 def _detect_contrast_clause(text: str) -> Tuple[bool, Optional[int]]:
@@ -1047,13 +1057,11 @@ def _pair_aspects_opinions(
         results = []
         for a in aspect_mentions:
             sent = global_sentiment or "neutral"
-            conf_base = 0.7 if global_sentiment else 0.5
 
             # Contrast-clause override
             if second_clause_negative and second_clause_start is not None:
                 if a.get("pos", 0) >= second_clause_start:
                     sent = "negative"
-                    conf_base = 0.85
 
             conf = _confidence(
                 match_type=a["match_type"],
@@ -1065,21 +1073,22 @@ def _pair_aspects_opinions(
             results.append(_make_result(a, None, sent, conf))
         return results
 
-    # Build (distance, aspect_idx, opinion_idx) triples
+    # Pairing priority: same sentence first, then same contrast clause
+    # ("price is too high | but shipping was fast"), then character distance.
+    # (An earlier version clamped same-sentence distances to 0, which erased
+    # the distance signal in short messages and paired by list order.)
+    clause_starts = _contrast_clause_starts(text)
+
+    def _clause(pos: int) -> int:
+        return sum(1 for start in clause_starts if pos >= start)
+
     pairs = []
     for ai, a in enumerate(aspect_mentions):
         for oi, o in enumerate(opinion_mentions):
-            # Same-sentence bonus: look for shared period boundaries
-            a_sent_start = text.rfind(".", 0, a["pos"])
-            a_sent_end   = text.find(".", a["pos"])
-            o_sent_start = text.rfind(".", 0, o["pos"])
-
-            same_sentence = (a_sent_start == o_sent_start)
+            same_sentence = text.rfind(".", 0, a["pos"]) == text.rfind(".", 0, o["pos"])
+            same_clause   = _clause(a["pos"]) == _clause(o["pos"])
             dist = abs(a["pos"] - o["pos"])
-            if same_sentence:
-                dist = max(0, dist - 30)
-
-            pairs.append((dist, ai, oi))
+            pairs.append(((not same_sentence, not same_clause, dist), dist, ai, oi))
 
     pairs.sort(key=lambda x: x[0])
 
@@ -1087,7 +1096,7 @@ def _pair_aspects_opinions(
     assigned_opinions: set = set()
     results: List[Dict] = []
 
-    for dist, ai, oi in pairs:
+    for _key, dist, ai, oi in pairs:
         if ai in assigned_aspects or oi in assigned_opinions:
             continue
         assigned_aspects.add(ai)
@@ -1235,6 +1244,23 @@ def extract_aspect_opinions(
         if emb_opinion:
             # Treat as a single whole-text opinion signal
             opinion_mentions = [emb_opinion]
+
+    # ── Step 4b: Drop aspects that are really the opinion word ────────────────
+    # "shipping was fast": "fast" is both a performance term and the opinion
+    # about shipping. Keep it as an aspect only if nothing else was found.
+    opinion_spans = [
+        (o["pos"], o["pos"] + len(o["opinion_term"]))
+        for o in opinion_mentions if o.get("opinion_term") and "pos" in o
+    ]
+
+    def _is_opinion_span(a: Dict) -> bool:
+        a_start = a.get("pos", -1)
+        a_end = a_start + len(a.get("aspect_term") or "")
+        return any(a_start < o_end and o_start < a_end for o_start, o_end in opinion_spans)
+
+    real_aspects = [a for a in aspect_mentions if not _is_opinion_span(a)]
+    if real_aspects:
+        aspect_mentions = real_aspects
 
     # ── Step 5: Contrast clause detection ─────────────────────────────────────
     second_clause_neg, second_clause_start = _detect_contrast_clause(original_text)

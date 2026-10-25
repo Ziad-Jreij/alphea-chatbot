@@ -1,0 +1,17 @@
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+addopts = "-p no:cacheprovider"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+extend-exclude = ["models", ".rasa"]
+
+[tool.ruff.lint]
+# Correctness only (syntax errors, undefined names, unused imports/variables).
+# Style rules can be adopted later without blocking CI on existing code.
+select = ["E9", "F63", "F7", "F82", "F401", "F841"]

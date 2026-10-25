@@ -2,16 +2,8 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir \
-    flask==3.0.* \
-    flask-cors==4.0.* \
-    sqlalchemy==2.0.* \
-    psycopg2-binary==2.9.* \
-    PyJWT==2.10.* \
-    structlog==23.* \
-    prometheus-client==0.20.* \
-    gunicorn==21.* \
-    "flask-limiter[redis]==3.*"
+COPY requirements/dashboard.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY dashboard/app.py ./app.py
 COPY dashboard/dashboard.html dashboard/login.html ./

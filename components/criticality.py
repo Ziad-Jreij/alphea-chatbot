@@ -221,7 +221,9 @@ SAFETY_PATTERNS = [
     r"caught fire",
     r"on fire",
     r"burn(ing)? smell",
-    r"smok(e|ing)",
+    # Device smoking / smoke coming out — not any mention ("I don't smoke").
+    r"\bsmok(ing|ed)\b",
+    r"smoke (is )?(coming|came|pouring) (out|from)",
     r"explod(ed|e|ing)",
     r"electric shock",
     r"shocked me",
@@ -233,7 +235,9 @@ MEDICAL_PATTERNS = [
     r"wrong label",
     r"wrong medicine",
     r"wrong (dose|dosage)",
-    r"expired (medicine|pill|drug)?",
+    # The group used to be optional, so "my coupon expired yesterday" was HIGH.
+    r"expired (medicines?|medications?|pills?|drugs?)",
+    r"(medicines?|medications?|pills?|drugs?) (is|are|was|were) expired",
     r"allergic reaction",
     r"severe side effects?",
 ]
@@ -253,14 +257,14 @@ CORE_FUNCTION_PATTERNS = [
     r"keeps? (freezing|crashing|restarting|disconnecting)",
     r"crash(es|ed)? (often|repeatedly|again|constantly|every time)",
     r"screen (keeps )?freez(ing|es)",
-    r"won[''']?t (start|turn on|boot|open|load)",
+    r"won[’']?t (start|turn on|boot|open|load)",
     # "not working" only with subject anchor (device/app/phone/system)
-    r"(device|phone|app|system|laptop|tablet|router|printer)\s+(is\s+)?(not working|stopped working|doesn[''']?t work)",
+    r"(device|phone|app|system|laptop|tablet|router|printer)\s+(is\s+)?(not working|stopped working|doesn[’']?t work)",
     # Battery drain with specificity
     r"battery (dies?|drains?) (after|in) \d",
     # Complete failure phrases
     r"completely (dead|broken|stopped|unusable)",
-    r"(won[''']?t|doesn[''']?t) (do anything|respond|work at all)",
+    r"(won[’']?t|doesn[’']?t) (do anything|respond|work at all)",
 ]
 
 FRUSTRATION_PATTERNS = [
@@ -464,14 +468,13 @@ def explain_escalation(result: Dict[str, Any]) -> str:
       "Escalated to HIGH because a high-priority keyword matched: 'unauthorized charge'."
       "Escalated to HIGH because a safety rule fired: pattern 'caught fire'."
       "Escalated to MEDIUM because the model rated urgency at 0.58 (threshold 0.45), boosted by Frustrated emotion."
-      "No escalation (LOW): model urgency confidence 0.22, no keywords or rules matched."
+      "No escalation (LOW): the model rated this LOW with confidence 0.78; no keywords or rules matched."
     """
     level     = (result.get("criticality_level") or "low").upper()
     source    = result.get("source") or "model"
     score     = float(result.get("criticality_score") or 0.0)
     keyword   = result.get("matched_keyword")
     emotion   = result.get("emotion_used")
-    reason_code = result.get("reason_code", "")
 
     if "keyword_high" in source or (source == "keyword" and result.get("criticality_level") == "high"):
         return f"Escalated to {level} because a high-priority keyword matched: '{keyword}'."
@@ -501,8 +504,8 @@ def explain_escalation(result: Dict[str, Any]) -> str:
             f"(threshold {thresh:.2f}){emo_part}."
         )
     return (
-        f"No escalation ({level}): model urgency confidence {score:.2f} "
-        f"(below {MEDIUM_CONF_THRESHOLD:.2f}), no keywords or rules matched."
+        f"No escalation ({level}): the model rated this {level} with confidence {score:.2f}; "
+        f"no keywords or rules matched."
     )
 
 
