@@ -33,6 +33,10 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Torch defaults to one thread per core; on many-core CPUs that thrashes on the
+# small batches used here (tail latency of seconds). 8 threads measured best.
+torch.set_num_threads(int(os.environ.get("TORCH_NUM_THREADS", min(8, torch.get_num_threads()))))
+
 # ---------------------------------------------------------------------------
 # Keyword loading & compiled patterns (shared for NLU + actions)
 # ---------------------------------------------------------------------------
@@ -267,8 +271,16 @@ CORE_FUNCTION_PATTERNS = [
     r"(won[’']?t|doesn[’']?t) (do anything|respond|work at all)",
 ]
 
+_REPEAT_COUNT = r"(three|four|five|six|seven|eight|nine|ten|several|many|multiple|countless|\d+)"
+
 FRUSTRATION_PATTERNS = [
     r"reported this (three|3|four|4|several|many) times",
+    # Repeated unresolved contact: "contacted you three times", "the fourth
+    # time I'm writing", "six emails", "called five times this week".
+    rf"(contacted|called|emailed|written|wrote|messaged|chatted|complained|asked)"
+    rf"( to)?( you| support| your team)?( about \w+( \w+)?)? {_REPEAT_COUNT} times",
+    r"\b(third|fourth|fifth|sixth|\d+(st|nd|rd|th)) time (i|i'm|i am|i've|you|that|this)\b",
+    rf"\b{_REPEAT_COUNT} (emails|calls|messages|tickets|complaints)\b",
     r"no one is helping me",
     r"no one helps me",
     r"no one is responding",
@@ -284,11 +296,16 @@ ALL_RULE_PATTERNS = (
     + FRUSTRATION_PATTERNS
 )
 
-def _matches_any(text: str, patterns: List[str]) -> Optional[str]:
-    """Return the first regex pattern that matches, or None."""
+def _matches_any(text: str, patterns: List[str], skip_negated: bool = False) -> Optional[str]:
+    """Return the first regex pattern that matches, or None.
+
+    With skip_negated, matches preceded by a negation/hearsay word ("no
+    unauthorized charge", "I heard this is a scam") are ignored.
+    """
     for p in patterns:
-        if re.search(p, text):
-            return p
+        for m in re.finditer(p, text):
+            if not (skip_negated and _is_negated(text, m.start())):
+                return p
     return None
 
 
@@ -326,12 +343,15 @@ def _apply_structural_rules(
     matched_pattern: Optional[str] = None
 
     # ---- Layer 0: hard safety / medical / finance overrides (force HIGH) ----
-    for group, label in (
-        (SAFETY_PATTERNS, "safety_rule"),
-        (MEDICAL_PATTERNS, "medical_rule"),
-        (FINANCE_PATTERNS, "finance_rule"),
+    # Only the finance rules honour negation/hearsay: the window is crude, and
+    # for safety/medical a missed escalation ("I can't believe it caught
+    # fire") is worse than a false alarm.
+    for group, label, skip_negated in (
+        (SAFETY_PATTERNS, "safety_rule", False),
+        (MEDICAL_PATTERNS, "medical_rule", False),
+        (FINANCE_PATTERNS, "finance_rule", True),
     ):
-        pat = _matches_any(lower, group)
+        pat = _matches_any(lower, group, skip_negated=skip_negated)
         if pat:
             new_dist = _boost_level_prob(dist, "high", 0.90)
             return new_dist, f"+{label}", pat
@@ -408,6 +428,40 @@ def _apply_structural_rules(
 _CRIT_MODEL_NAME = os.environ.get("CRITICALITY_MODEL", "MoritzLaurer/deberta-v3-base-zeroshot-v2.0")
 _CRIT_LABELS = ["low urgency", "medium urgency", "high urgency"]
 _CRIT_HYPOTHESIS = "This support request is {}."
+
+# "risk" (default) scores the categories below independently; "urgency" is the
+# original single softmax over low/medium/high urgency (kept for comparison).
+CRITICALITY_STRATEGY = os.environ.get("CRITICALITY_STRATEGY", "risk")
+
+# Tuned on the dev split of data/eval/criticality_benchmark.yml (2026-10);
+# see eval_criticality.py for the numbers. Edit together with the benchmark.
+RISK_HYPOTHESIS = "This message reports {}."
+RISK_CATEGORIES: Dict[str, List[str]] = {
+    "high": [
+        "a safety hazard such as fire, smoke, sparks, overheating or an electric shock",
+        "a physical injury or danger to a person or a child",
+        "fraud, an unauthorized payment or a stolen card",
+        "a hacked, compromised or taken-over account",
+        "a privacy breach or exposed personal data",
+        "a medical or health risk",
+        # Was "a legal threat, a chargeback or a formal complaint", which scored
+        # 0.7-0.9 on plain return requests ("I want to return my order").
+        "a threat to take legal action",
+    ],
+    "medium": [
+        "a late, lost or missing delivery",
+        "a wrong, damaged or defective item",
+        "a billing, refund or payment problem",
+        "poor customer service or no reply from support",
+        "a website, app or account access problem",
+    ],
+    "low": [
+        "a general question or information request",
+        "a compliment or a thank you",
+        "a routine request to change an order or account",
+    ],
+}
+RISK_HIGH_THRESHOLD = 0.70   # strongest risk category (after emotion prior) ≥ this → high
 
 _crit_lock = Lock()
 _crit_pipe = None
@@ -497,6 +551,11 @@ def explain_escalation(result: Dict[str, Any]) -> str:
 
     # Model path
     emo_part = f", boosted by '{emotion}' emotion" if emotion and emotion not in ("neutral", "none") else ""
+    risk_category = result.get("risk_category")
+    if source.startswith("risk_model") and level == "HIGH" and risk_category:
+        return f"Escalated to HIGH because the model detected {risk_category} (score {score:.2f}){emo_part}."
+    if source.startswith("risk_model") and level == "MEDIUM":
+        return f"Raised to MEDIUM: the model sees a customer problem without a safety, fraud or legal risk{emo_part}."
     thresh = HIGH_CONF_THRESHOLD if level == "HIGH" else MEDIUM_CONF_THRESHOLD
     if level in ("HIGH", "MEDIUM"):
         return (
@@ -561,6 +620,64 @@ def ensure_crit_pipe(model_name: str = _CRIT_MODEL_NAME):
     return _crit_pipe
 
 
+def _emotion_weights(emotion: Optional[str]) -> Dict[str, float]:
+    """Log-odds prior for an emotion label (raw GoEmotions or business bucket).
+
+    The action server passes raw labels ("annoyance", "nervousness"), most of
+    which are not keys of EMOTION_WEIGHTS; fall back to their business bucket
+    so the prior is not silently skipped.
+    """
+    zero = {"high": 0.0, "medium": 0.0, "low": 0.0}
+    if not emotion:
+        return zero
+    e = emotion.lower()
+    if e in EMOTION_WEIGHTS:
+        return EMOTION_WEIGHTS[e]
+    from components.emotion import map_to_business_emotion
+    return EMOTION_WEIGHTS.get(map_to_business_emotion(e), zero)
+
+
+def _shift(p: float, weight: float) -> float:
+    return _sigmoid(_logit(p) + weight)
+
+
+def _urgency_distribution(pipe, text, labels, hypothesis_template, weights) -> Dict[str, float]:
+    """Legacy strategy: one softmax over "low/medium/high urgency"."""
+    zs = pipe(text, candidate_labels=labels, hypothesis_template=hypothesis_template, multi_label=False)
+    mapping = {"low urgency": "low", "medium urgency": "medium", "high urgency": "high"}
+    raw = {mapping[l]: float(sc) for l, sc in zip(zs["labels"], zs["scores"]) if l in mapping}
+    if not all(k in raw for k in ("low", "medium", "high")):
+        logger.warning("Zero-shot labels %s did not map to low/medium/high; using a neutral distribution.",
+                       zs["labels"])
+        raw = {"low": 0.8, "medium": 0.15, "high": 0.05}
+    probs = {k: _shift(v, weights[k]) for k, v in raw.items()}
+    total = sum(probs.values()) or 1.0
+    return {k: v / total for k, v in probs.items()}
+
+
+def _risk_distribution(pipe, text, weights) -> Tuple[Dict[str, float], str]:
+    """Risk strategy: every category is scored independently (multi-label).
+
+    HIGH probability is the strongest risk category, so a safety or fraud
+    report escalates on its own merit instead of having to out-score "a
+    defective item" in a single ranking. The remaining mass is split between
+    medium and low by the strongest problem vs routine category.
+    """
+    labels = [label for group in RISK_CATEGORIES.values() for label in group]
+    # One batched forward pass for all categories: ~190 ms vs ~550+ ms on CPU.
+    zs = pipe(text, candidate_labels=labels, hypothesis_template=RISK_HYPOTHESIS, multi_label=True,
+              batch_size=len(labels))
+    scores = dict(zip(zs["labels"], zs["scores"]))
+    top_risk = max(RISK_CATEGORIES["high"], key=lambda label: scores[label])
+
+    risk    = _shift(scores[top_risk], weights["high"])
+    problem = _shift(max(scores[label] for label in RISK_CATEGORIES["medium"]), weights["medium"])
+    routine = _shift(max(scores[label] for label in RISK_CATEGORIES["low"]), weights["low"])
+    medium_share = problem / ((problem + routine) or 1.0)
+    dist = {"high": risk, "medium": (1 - risk) * medium_share, "low": (1 - risk) * (1 - medium_share)}
+    return dist, top_risk
+
+
 def infer_criticality_for_text(
     text: str,
     emotion: Optional[str],
@@ -570,6 +687,7 @@ def infer_criticality_for_text(
     labels: Optional[List[str]] = None,
     boost_from_emotion: bool = True,
     heuristics_enabled: bool = True,
+    strategy: Optional[str] = None,
     # these two are now ignored; kept only for backward compatibility
     high_keywords: Optional[List[str]] = None,
     medium_keywords: Optional[List[str]] = None,
@@ -577,98 +695,70 @@ def infer_criticality_for_text(
     """Core inference logic, shared between the Rasa component and custom actions.
 
     Order:
-      1) Keyword overrides (YAML) if `heuristics_enabled=True`.
-      2) Zero-shot model.
-      3) Optional emotion-based adjustment.
+      1) High-priority keywords (YAML) decide immediately; a medium keyword
+         sets a floor of MEDIUM but no longer blocks a HIGH from the model
+         or rules ("charged twice and I need this fixed immediately!").
+      2) Zero-shot model ("risk" categories by default, or legacy "urgency").
+      3) Emotion prior (log-odds shift).
+      4) Structural safety / medical / finance / frustration rules.
     """
-    if labels is None:
-        labels = _CRIT_LABELS
-
+    strategy = (strategy or CRITICALITY_STRATEGY).lower()
     text = (text or "").strip()
 
-    # 0) Keyword overrides (guardrail, shared for NLU + actions)
+    medium_floor: Optional[Dict[str, Any]] = None
     if heuristics_enabled:
         kw_res = _apply_keyword_overrides_text(text)
         if kw_res is not None:
-            return kw_res
+            if kw_res["criticality_level"] == "high":
+                return kw_res
+            medium_floor = kw_res
 
     pipe = ensure_crit_pipe(model_name)
+    weights = _emotion_weights(emotion) if boost_from_emotion else _emotion_weights(None)
 
-    # 1) Zero-shot classification
-    zs = pipe(
-        text,
-        candidate_labels=labels,
-        hypothesis_template=hypothesis_template,
-        multi_label=False,
-    )
-
-    # Map model labels to canonical "low/medium/high"
-    mapping = {
-        "low urgency": "low",
-        "medium urgency": "medium",
-        "high urgency": "high",
-    }
-    raw: Dict[str, float] = {}
-    for label, score in zip(zs["labels"], zs["scores"]):
-        key = mapping.get(label)
-        if key is not None:
-            raw[key] = float(score)
-
-    # Ensure all keys exist; if not, fall back to a safe distribution
-    if not all(k in raw for k in ("low", "medium", "high")):
-        logger.warning(
-            "Zero-shot labels %s did not map cleanly to {low, medium, high}. "
-            "Falling back to neutral distribution.",
-            zs["labels"],
-        )
-        raw = {"low": 0.8, "medium": 0.15, "high": 0.05}
-
-    # 2) Emotion prior
-    fused = raw
-    if boost_from_emotion and emotion:
-        e = emotion.lower()
-        weights = EMOTION_WEIGHTS.get(e, {"high": 0.0, "medium": 0.0, "low": 0.0})
-
-        logits = {
-            "low": _logit(raw["low"]) + weights["low"],
-            "medium": _logit(raw["medium"]) + weights["medium"],
-            "high": _logit(raw["high"]) + weights["high"],
-        }
-        probs = {k: _sigmoid(v) for k, v in logits.items()}
-        total = sum(probs.values()) or 1.0
-        fused = {k: v / total for k, v in probs.items()}
+    risk_category: Optional[str] = None
+    if strategy == "urgency":
+        fused = _urgency_distribution(pipe, text, labels or _CRIT_LABELS, hypothesis_template, weights)
+        source = "model"
+    else:
+        fused, risk_category = _risk_distribution(pipe, text, weights)
+        source = "risk_model"
 
     rule_suffix = ""
     rule_match: Optional[str] = None
-
-    # 3) Structural rules on top of model+emotion (if enabled and no keyword override)
     if heuristics_enabled:
         fused, rule_suffix, rule_match = _apply_structural_rules(text, fused)
+    source += rule_suffix
 
-    # 4) Pick level using EXPLICIT confidence thresholds (Task 3)
-    #    Rules / keywords already set the distribution so argmax still works,
-    #    but for pure model paths we enforce the documented thresholds.
-    raw_argmax  = max(fused, key=fused.get)
-    high_conf   = float(fused.get("high", 0.0))
-    medium_conf = float(fused.get("medium", 0.0))
-
-    if high_conf >= HIGH_CONF_THRESHOLD:
-        level = "high"
-    elif medium_conf >= MEDIUM_CONF_THRESHOLD or raw_argmax == "medium":
-        level = "medium"
+    # Explicit level thresholds (Task 3)
+    if strategy == "urgency":
+        raw_argmax = max(fused, key=fused.get)
+        if fused["high"] >= HIGH_CONF_THRESHOLD:
+            level = "high"
+        elif fused["medium"] >= MEDIUM_CONF_THRESHOLD or raw_argmax == "medium":
+            level = "medium"
+        else:
+            level = "low"
     else:
-        level = "low"
+        if fused["high"] >= RISK_HIGH_THRESHOLD:
+            level = "high"
+        else:
+            level = "medium" if fused["medium"] >= fused["low"] else "low"
+
+    matched = rule_match
+    if medium_floor is not None and level == "low":
+        level = "medium"
+        source = "keyword_medium+" + source
+        matched = medium_floor["matched_keyword"]
 
     score      = float(fused[level])
     escalation = ESCALATION_MAP[level]
 
-    # Build human-readable source tag (Task 4)
-    source = "model" + rule_suffix
-
-    # 5) Assemble reason_code + English explanation (Task 4)
-    reason_detail: Optional[str] = None
-    if rule_match:
-        reason_detail = rule_match
+    # Reason code + English explanation (Task 4)
+    if matched:
+        reason_detail = matched
+    elif level == "high" and risk_category and not rule_suffix:
+        reason_detail = f"{risk_category},conf={score:.2f}"
     elif emotion:
         reason_detail = f"conf={score:.2f},emotion={emotion}"
     else:
@@ -679,17 +769,13 @@ def infer_criticality_for_text(
         "criticality_level": level,
         "criticality_score": score,
         "source": source,
-        "matched_keyword": rule_match,
+        "matched_keyword": matched,
+        "risk_category": risk_category,
         "emotion_used": emotion,
         "reason_code": reason_code,
     })
 
-    logger.info(
-        "[criticality] %s | reason=%s | text=%r",
-        explanation,
-        reason_code,
-        text[:120],
-    )
+    logger.info("[criticality] %s | reason=%s | text=%r", explanation, reason_code, text[:120])
 
     return {
         "criticality_level": level,
@@ -697,7 +783,8 @@ def infer_criticality_for_text(
         "escalation": escalation,
         "distribution": fused,
         "source": source,
-        "matched_keyword": rule_match,
+        "matched_keyword": matched,
+        "risk_category": risk_category,
         "reason_code": reason_code,   # NEW – Task 4
         "explanation": explanation,   # NEW – Task 4
         "emotion_used": emotion,      # NEW – transparency

@@ -21,6 +21,9 @@
 #                  NEEDS HUMAN REVIEW before results are quoted externally
 # tags:    trap categories, reported separately by the eval script
 #          negation, hearsay, question, contrast, safety_word, repeated
+# split:   dev (default) — used while designing and tuning criticality
+#          holdout       — written before the escalation-recall work began and
+#                          only scored for final reporting; never tune on it
 
 cases:
   # ── thesis set: LOW ──────────────────────────────────────────────────────
@@ -136,6 +139,11 @@ cases:
   - {text: "My order was not damaged at all, everything is perfect.", label: low, source: draft, tags: [negation]}
   - {text: "There was no unauthorized charge, I just want a copy of the invoice.", label: low, source: draft, tags: [negation]}
   - {text: "Can I cancel my newsletter subscription?", label: low, source: draft}
+  # added 2026-10-25 after live testing: plain return/refund requests were escalated
+  - {text: "I want to return an item", label: low, source: draft}
+  - {text: "I want to return my order", label: low, source: draft}
+  - {text: "I'd like a refund for my order", label: low, source: draft}
+  - {text: "Can I return this if it doesn't fit?", label: low, source: draft, tags: [question]}
 
   # ── draft set: MEDIUM ────────────────────────────────────────────────────
   - {text: "My order was supposed to arrive yesterday and it still hasn't come.", label: medium, source: draft}
@@ -274,3 +282,98 @@ cases:
   - {text: "My prescription glasses came with the wrong prescription and I get headaches while driving.", label: high, source: draft}
   - {text: "Your recall notice says my car seat is dangerous but I can't get a replacement.", label: high, source: draft}
   - {text: "The phone battery you sold me is bulging and hot.", label: high, source: draft}
+
+  # ── holdout set (2026-10-25, drafted before tuning; source: draft) ────────
+  # LOW
+  - {text: "Do you have any coupons for first-time customers?", label: low, source: draft, split: holdout}
+  - {text: "Can I order now and pay when it arrives?", label: low, source: draft, split: holdout}
+  - {text: "Which courier do you use for deliveries to Paphos?", label: low, source: draft, split: holdout}
+  - {text: "Is the coffee machine compatible with pods from other brands?", label: low, source: draft, split: holdout}
+  - {text: "How can I see my previous orders?", label: low, source: draft, split: holdout}
+  - {text: "Can I change my order to a bigger size before it's packed?", label: low, source: draft, split: holdout}
+  - {text: "Do you offer a warranty extension?", label: low, source: draft, split: holdout}
+  - {text: "The headphones sound amazing, thanks!", label: low, source: draft, split: holdout}
+  - {text: "Where do I enter my VAT number for a business invoice?", label: low, source: draft, split: holdout}
+  - {text: "What's the return address for exchanges?", label: low, source: draft, split: holdout}
+  - {text: "Can you tell me when the sale ends?", label: low, source: draft, split: holdout}
+  - {text: "Do your kettles have an automatic shut-off?", label: low, source: draft, split: holdout, tags: [question, safety_word]}
+  - {text: "Is this toy suitable for a three-year-old?", label: low, source: draft, split: holdout, tags: [question]}
+  - {text: "How do I set up two-factor authentication on my account?", label: low, source: draft, split: holdout, tags: [question]}
+  - {text: "Someone told me your prices went up, is that right?", label: low, source: draft, split: holdout, tags: [hearsay]}
+  - {text: "I read online that some chargers overheat, does yours?", label: low, source: draft, split: holdout, tags: [hearsay, safety_word]}
+  - {text: "No fraud here, I just want to update my card details.", label: low, source: draft, split: holdout, tags: [negation]}
+  - {text: "Nothing is broken, I'd just like a different colour.", label: low, source: draft, split: holdout, tags: [negation]}
+  - {text: "I'm not in a rush, whenever the order ships is fine.", label: low, source: draft, split: holdout}
+  - {text: "Could you send me the assembly guide as a PDF?", label: low, source: draft, split: holdout}
+  - {text: "What does the fire-resistant rating on this blanket mean?", label: low, source: draft, split: holdout, tags: [safety_word]}
+  - {text: "Do you offer next-day delivery on weekends?", label: low, source: draft, split: holdout}
+  - {text: "I'd like to add another item to my existing order.", label: low, source: draft, split: holdout}
+  - {text: "Your new returns page is really clear, well done.", label: low, source: draft, split: holdout}
+  - {text: "Can I get an email when the camera is back in stock?", label: low, source: draft, split: holdout}
+  - {text: "Is the security camera easy to install myself?", label: low, source: draft, split: holdout, tags: [safety_word]}
+  - {text: "What's the cheapest way to ship to Greece?", label: low, source: draft, split: holdout}
+  - {text: "Do you donate unsold stock?", label: low, source: draft, split: holdout}
+  - {text: "Can I change the delivery instructions to leave it with my neighbour?", label: low, source: draft, split: holdout}
+  - {text: "Which of your vacuums is best for pet hair?", label: low, source: draft, split: holdout}
+  # MEDIUM
+  - {text: "My parcel has been 'out for delivery' for three days.", label: medium, source: draft, split: holdout}
+  - {text: "The lamp arrived with a dented base.", label: medium, source: draft, split: holdout}
+  - {text: "I ordered a set of four chairs and got three.", label: medium, source: draft, split: holdout}
+  - {text: "The refund went to my old card, which is closed.", label: medium, source: draft, split: holdout}
+  - {text: "The discount from the newsletter wasn't applied to my order.", label: medium, source: draft, split: holdout}
+  - {text: "My password reset link says it has expired every time I click it.", label: medium, source: draft, split: holdout, tags: [safety_word]}
+  - {text: "The printer jams on every second page.", label: medium, source: draft, split: holdout}
+  - {text: "The courier marked my parcel as refused, but I never refused it.", label: medium, source: draft, split: holdout}
+  - {text: "I was sent a used item that has someone else's hair on it.", label: medium, source: draft, split: holdout}
+  - {text: "The jeans faded badly after one wash.", label: medium, source: draft, split: holdout}
+  - {text: "My exchange request has been 'pending' for two weeks.", label: medium, source: draft, split: holdout}
+  - {text: "I was charged a restocking fee that wasn't mentioned anywhere.", label: medium, source: draft, split: holdout}
+  - {text: "The smartwatch won't sync with my phone anymore.", label: medium, source: draft, split: holdout}
+  - {text: "Your support agent promised a voucher that never arrived.", label: medium, source: draft, split: holdout}
+  - {text: "The box was fine, but the vase inside was chipped.", label: medium, source: draft, split: holdout, tags: [contrast]}
+  - {text: "I can't download my invoice, the button does nothing.", label: medium, source: draft, split: holdout}
+  - {text: "The rug is a completely different pattern from the photo.", label: medium, source: draft, split: holdout}
+  - {text: "Delivery was booked for the morning and nobody came all day.", label: medium, source: draft, split: holdout}
+  - {text: "I was told my order would ship today and it's still processing.", label: medium, source: draft, split: holdout}
+  - {text: "The case doesn't fit the phone model it says it's for.", label: medium, source: draft, split: holdout}
+  - {text: "My account still shows my old address even after I changed it.", label: medium, source: draft, split: holdout}
+  - {text: "The paint on the bike frame is peeling off already.", label: medium, source: draft, split: holdout}
+  - {text: "I keep getting marketing emails after unsubscribing twice.", label: medium, source: draft, split: holdout}
+  - {text: "The remote control was missing from the TV box.", label: medium, source: draft, split: holdout}
+  - {text: "Nobody has answered my email about a late delivery for four days.", label: medium, source: draft, split: holdout}
+  - {text: "I'm annoyed, the cheaper option I chose was ignored and I was billed for express.", label: medium, source: draft, split: holdout}
+  - {text: "The blender's lid cracked after a week of normal use.", label: medium, source: draft, split: holdout}
+  - {text: "The online tracker shows my parcel in another country.", label: medium, source: draft, split: holdout}
+  - {text: "My order arrived split across three deliveries and one is missing.", label: medium, source: draft, split: holdout}
+  - {text: "It's not dangerous or anything, but the fan makes a grinding noise.", label: medium, source: draft, split: holdout, tags: [negation, safety_word]}
+  # HIGH
+  - {text: "The laptop charger got so hot it melted the plastic on my desk.", label: high, source: draft, split: holdout}
+  - {text: "My daughter's crib has a broken slat and her leg got stuck.", label: high, source: draft, split: holdout}
+  - {text: "I see four orders on my account that I didn't place, shipped to an address I don't know.", label: high, source: draft, split: holdout}
+  - {text: "There's a burning smell and sparks from the back of the fridge.", label: high, source: draft, split: holdout}
+  - {text: "Your site took 2,000 euros from my account for one order.", label: high, source: draft, split: holdout}
+  - {text: "My login details were changed and my saved cards are being used.", label: high, source: draft, split: holdout}
+  - {text: "The supplement you sold me caused chest pains, I'm going to the doctor.", label: high, source: draft, split: holdout}
+  - {text: "I got another customer's order with their full name, address and medical prescription.", label: high, source: draft, split: holdout}
+  - {text: "Someone pretending to be your company called and took my bank details.", label: high, source: draft, split: holdout}
+  - {text: "The electric blanket scorched my sheets overnight.", label: high, source: draft, split: holdout}
+  - {text: "I'll be contacting my lawyer about the damage your installer did to my kitchen.", label: high, source: draft, split: holdout}
+  - {text: "The baby monitor stopped working and I didn't hear my son choking.", label: high, source: draft, split: holdout}
+  - {text: "My bank says there's a card-testing attack coming from your checkout.", label: high, source: draft, split: holdout}
+  - {text: "The extension cable shocked my husband when he unplugged it.", label: high, source: draft, split: holdout}
+  - {text: "I want every bit of my personal information erased from your systems now.", label: high, source: draft, split: holdout}
+  - {text: "Five calls, three emails, still no refund for the 600 euro TV and I'm done with you.", label: high, source: draft, split: holdout, tags: [repeated]}
+  - {text: "The car jack slipped and the car nearly fell on me.", label: high, source: draft, split: holdout}
+  - {text: "My account balance went to zero overnight and I didn't spend anything.", label: high, source: draft, split: holdout}
+  - {text: "The eye drops were contaminated, my eye is red and swollen.", label: high, source: draft, split: holdout}
+  - {text: "The courier left my insulin in the sun for hours.", label: high, source: draft, split: holdout}
+  - {text: "I received an email from your domain asking me to confirm my card PIN.", label: high, source: draft, split: holdout}
+  - {text: "The space heater tipped over and didn't switch off, the carpet is burnt.", label: high, source: draft, split: holdout}
+  - {text: "It charges fine but the battery got hot enough to burn my fingers.", label: high, source: draft, split: holdout, tags: [contrast]}
+  - {text: "Looks great, although the glass shelf shattered and cut my arm.", label: high, source: draft, split: holdout, tags: [contrast]}
+  - {text: "Your app showed me someone else's order history and card ending.", label: high, source: draft, split: holdout}
+  - {text: "My 80-year-old father was talked into buying 12 laptops by your sales line.", label: high, source: draft, split: holdout}
+  - {text: "The wall mount came loose and the TV fell next to my toddler.", label: high, source: draft, split: holdout}
+  - {text: "I'm filing a chargeback and reporting you to the authorities.", label: high, source: draft, split: holdout}
+  - {text: "The carbon monoxide detector you sold me doesn't detect anything.", label: high, source: draft, split: holdout}
+  - {text: "There's a strong gas smell since your technician fitted the boiler.", label: high, source: draft, split: holdout}

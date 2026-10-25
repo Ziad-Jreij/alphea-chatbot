@@ -4,17 +4,23 @@ Criticality benchmark.
 Scores criticality models on the labelled set in data/eval/criticality_benchmark.yml
 in two modes:
 
-  raw       zero-shot model argmax only — measures model quality
+  raw       the model alone, no guardrails or emotion prior — model quality
   pipeline  the production path (keyword guardrails → model → emotion prior →
             structural rules), i.e. infer_criticality_for_text() exactly as the
             action server calls it — measures what users actually get
+
+and for either criticality strategy ("risk", the default, or legacy "urgency").
+
+Splits: tune on --split dev; report --split holdout only for final numbers.
 
 Usage (inside the rasa-actions image, models cached in the hf_cache volume):
     docker compose run --rm --no-deps -v "$PWD":/app -w /app rasa-actions \\
         python eval_criticality.py --json results/criticality.json
 
     python eval_criticality.py --models deberta-base --modes pipeline --show-errors
-    python eval_criticality.py --source thesis          # original 40 cases only
+    python eval_criticality.py --strategies risk urgency  # compare strategies
+    python eval_criticality.py --split holdout            # final reporting only
+    python eval_criticality.py --source thesis            # original 40 cases only
 """
 
 import argparse
@@ -40,8 +46,10 @@ MODELS = {
 # Data
 # ---------------------------------------------------------------------------
 
-def load_cases(source: str) -> list:
+def load_cases(source: str, split: str = "dev") -> list:
     cases = yaml.safe_load(BENCHMARK.read_text())["cases"]
+    if split != "all":
+        cases = [c for c in cases if c.get("split", "dev") == split]
     if source != "all":
         cases = [c for c in cases if c["source"] == source]
     return cases
@@ -63,33 +71,34 @@ def emotion_labels(cases: list) -> list:
 # Inference
 # ---------------------------------------------------------------------------
 
-def run_model(model_key: str, cases: list, modes: list, emotions: list) -> dict:
+def run_model(model_key: str, cases: list, modes: list, emotions: list, strategy: str) -> dict:
     from components import criticality as crit
 
     model_name = MODELS[model_key]
     crit._crit_pipe = None               # ensure_crit_pipe caches the first model
     t_load = time.time()
-    pipe = crit.ensure_crit_pipe(model_name)
+    crit.ensure_crit_pipe(model_name)         # load once, timed separately from inference
     load_time = time.time() - t_load
     print(f"  {model_key}: loaded in {load_time:.1f}s")
 
-    label_map = {"low urgency": "low", "medium urgency": "medium", "high urgency": "high"}
     results = {}
     for mode in modes:
         preds, latencies = [], []
         for case, emo in zip(cases, emotions):
             t0 = time.time()
             if mode == "raw":
-                zs = pipe(case["text"], candidate_labels=crit._CRIT_LABELS,
-                          hypothesis_template=crit._CRIT_HYPOTHESIS, multi_label=False)
-                pred, source = label_map[zs["labels"][0]], "model"
+                res = crit.infer_criticality_for_text(case["text"], None, model_name=model_name,
+                                                      strategy=strategy, boost_from_emotion=False,
+                                                      heuristics_enabled=False)
             else:
-                res = crit.infer_criticality_for_text(case["text"], emo, model_name=model_name)
-                pred, source = res["criticality_level"], res["source"]
+                res = crit.infer_criticality_for_text(case["text"], emo, model_name=model_name,
+                                                      strategy=strategy)
+            pred, source = res["criticality_level"], res["source"]
             latencies.append(time.time() - t0)
             preds.append({**case, "pred": pred, "decided_by": source, "emotion": emo})
         results[mode] = {"predictions": preds, "latencies": latencies}
-    return {"model": model_key, "model_name": model_name, "load_time": load_time, "modes": results}
+    return {"model": f"{model_key}/{strategy}", "model_name": model_name, "strategy": strategy,
+            "load_time": load_time, "modes": results}
 
 
 # ---------------------------------------------------------------------------
@@ -145,14 +154,14 @@ def pct(x: float) -> str:
 def report(runs: list, show_errors: bool) -> None:
     sep = "═" * 76
     print(f"\n{sep}\n  SUMMARY\n{sep}")
-    print(f"  {'model':<15} {'mode':<9} {'acc':>6} {'macroF1':>8} {'HIGH-P':>7} {'HIGH-R':>7} "
+    print(f"  {'model':<22} {'mode':<9} {'acc':>6} {'macroF1':>8} {'HIGH-P':>7} {'HIGH-R':>7} "
           f"{'LOW→HIGH':>9} {'median ms':>10}")
     for run in runs:
         for mode, r in run["modes"].items():
             m = compute_metrics(r["predictions"])
             false_alarms = sum(1 for p in r["predictions"] if p["label"] == "low" and p["pred"] == "high")
             lat = statistics.median(r["latencies"]) * 1000
-            print(f"  {run['model']:<15} {mode:<9} {pct(m['accuracy'])} {pct(m['macro_f1']):>8} "
+            print(f"  {run['model']:<22} {mode:<9} {pct(m['accuracy'])} {pct(m['macro_f1']):>8} "
                   f"{pct(m['precision']['high']):>7} {pct(m['recall']['high']):>7} "
                   f"{false_alarms:>9} {lat:>10.0f}")
 
@@ -182,7 +191,8 @@ def write_json(runs: list, path: str) -> None:
         for mode, r in run["modes"].items():
             m = compute_metrics(r["predictions"])
             out.append({
-                "model": run["model"], "model_name": run["model_name"], "mode": mode,
+                "model": run["model"], "model_name": run["model_name"], "strategy": run["strategy"],
+                "mode": mode, "n": len(r["predictions"]),
                 "accuracy": m["accuracy"], "macro_f1": m["macro_f1"],
                 "precision": m["precision"], "recall": m["recall"], "f1": m["f1"],
                 "median_latency_ms": statistics.median(r["latencies"]) * 1000,
@@ -206,6 +216,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--models", nargs="+", default=["deberta-base", "deberta-xsmall"], choices=MODELS)
     parser.add_argument("--modes", nargs="+", default=["raw", "pipeline"], choices=["raw", "pipeline"])
+    parser.add_argument("--strategies", nargs="+", default=["risk"], choices=["risk", "urgency"])
+    parser.add_argument("--split", default="dev", choices=["dev", "holdout", "all"])
     parser.add_argument("--source", default="all", choices=["all", "thesis", "draft"])
     parser.add_argument("--no-emotion", action="store_true",
                         help="pipeline mode without the emotion prior (skips the emotion model)")
@@ -213,15 +225,15 @@ def main():
     parser.add_argument("--json", help="write machine-readable results to this path")
     args = parser.parse_args()
 
-    cases = load_cases(args.source)
-    print(f"\n  {len(cases)} cases ({args.source}) from {BENCHMARK.name}")
+    cases = load_cases(args.source, args.split)
+    print(f"\n  {len(cases)} cases (split={args.split}, source={args.source}) from {BENCHMARK.name}")
 
     emotions = [None] * len(cases)
     if "pipeline" in args.modes and not args.no_emotion:
         print("  scoring emotion prior …")
         emotions = emotion_labels(cases)
 
-    runs = [run_model(m, cases, args.modes, emotions) for m in args.models]
+    runs = [run_model(m, cases, args.modes, emotions, st) for m in args.models for st in args.strategies]
     report(runs, args.show_errors)
     if args.json:
         write_json(runs, args.json)

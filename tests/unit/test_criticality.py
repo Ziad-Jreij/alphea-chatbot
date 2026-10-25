@@ -103,63 +103,171 @@ def test_boost_level_prob_renormalises():
 # ── Full pipeline with a fake zero-shot model ────────────────────────────────
 
 class FakeZeroShot:
-    def __init__(self, low, medium, high):
-        self.scores = {"low urgency": low, "medium urgency": medium, "high urgency": high}
+    """Returns fixed scores per candidate label (default 0.05)."""
+
+    def __init__(self, scores):
+        self.scores = scores
         self.calls = 0
 
-    def __call__(self, text, candidate_labels, hypothesis_template, multi_label):
+    def __call__(self, text, candidate_labels, hypothesis_template, multi_label, **kwargs):
         self.calls += 1
-        ordered = sorted(self.scores.items(), key=lambda kv: kv[1], reverse=True)
-        return {"labels": [k for k, _ in ordered], "scores": [v for _, v in ordered]}
+        ordered = sorted(candidate_labels, key=lambda l: self.scores.get(l, 0.05), reverse=True)
+        return {"labels": ordered, "scores": [self.scores.get(l, 0.05) for l in ordered]}
+
+
+SAFETY = crit.RISK_CATEGORIES["high"][0]
+DELIVERY = crit.RISK_CATEGORIES["medium"][0]
+QUESTION = crit.RISK_CATEGORIES["low"][0]
 
 
 @pytest.fixture
 def fake_model(monkeypatch):
-    def install(low, medium, high):
-        pipe = FakeZeroShot(low, medium, high)
+    def install(scores):
+        pipe = FakeZeroShot(scores)
         monkeypatch.setattr(crit, "ensure_crit_pipe", lambda *a, **k: pipe)
         return pipe
     return install
 
 
-def test_keyword_short_circuits_model(fake_model):
-    pipe = fake_model(0.9, 0.05, 0.05)
+def urgency(low, medium, high):
+    return {"low urgency": low, "medium urgency": medium, "high urgency": high}
+
+
+def test_risk_is_the_default_strategy():
+    assert crit.CRITICALITY_STRATEGY == "risk"
+
+
+def test_high_keyword_short_circuits_model(fake_model):
+    pipe = fake_model({QUESTION: 0.9})
     res = crit.infer_criticality_for_text("someone stole my credit card", "neutral")
     assert res["criticality_level"] == "high"
     assert pipe.calls == 0
 
 
-def test_model_low_stays_low(fake_model):
-    fake_model(0.85, 0.10, 0.05)
-    res = crit.infer_criticality_for_text("what are your store hours", "neutral")
+# Risk strategy
+
+def test_risk_category_escalates_and_is_explained(fake_model):
+    fake_model({SAFETY: 0.92, DELIVERY: 0.6})
+    res = crit.infer_criticality_for_text("the lamp wiring is exposed", "neutral")
+    assert res["criticality_level"] == "high"
+    assert res["risk_category"] == SAFETY
+    assert SAFETY in res["explanation"]
+    assert res["source"] == "risk_model"
+
+
+def test_problem_without_risk_is_medium(fake_model):
+    fake_model({SAFETY: 0.2, DELIVERY: 0.8, QUESTION: 0.3})
+    res = crit.infer_criticality_for_text("my parcel is late", "neutral")
+    assert res["criticality_level"] == "medium"
+    assert res["escalation"] == "potential"
+
+
+def test_routine_question_is_low(fake_model):
+    fake_model({SAFETY: 0.05, DELIVERY: 0.2, QUESTION: 0.9})
+    res = crit.infer_criticality_for_text("what are your opening hours", "neutral")
     assert res["criticality_level"] == "low"
     assert res["escalation"] == "none"
-    assert res["source"] == "model"
 
 
-def test_model_high_above_threshold(fake_model):
-    fake_model(0.10, 0.15, 0.75)
-    res = crit.infer_criticality_for_text("I need this fixed today", None)
+def test_risk_just_below_threshold_is_not_high(fake_model):
+    fake_model({SAFETY: crit.RISK_HIGH_THRESHOLD - 0.05, DELIVERY: 0.8})
+    res = crit.infer_criticality_for_text("the charger feels warm", "neutral")
+    assert res["criticality_level"] == "medium"
+
+
+def test_medium_keyword_is_a_floor_not_a_cap(fake_model):
+    # Regression: "charged twice" (medium keyword) used to return MEDIUM before
+    # the model ran, so a genuine fraud/urgent signal could never reach HIGH.
+    fake_model({crit.RISK_CATEGORIES["high"][2]: 0.95})
+    res = crit.infer_criticality_for_text("my card was charged twice and I need this fixed immediately", None)
     assert res["criticality_level"] == "high"
 
+    fake_model({QUESTION: 0.9})
+    res = crit.infer_criticality_for_text("I think I was charged twice?", None)
+    assert res["criticality_level"] == "medium"
+    assert res["source"].startswith("keyword_medium")
+    assert res["matched_keyword"] == "charged twice"
 
-def test_emotion_prior_raises_urgency(fake_model):
-    fake_model(0.45, 0.40, 0.15)
-    calm = crit.infer_criticality_for_text("my package has not arrived", "satisfied")
-    upset = crit.infer_criticality_for_text("my package has not arrived", "anxious")
+
+@pytest.mark.parametrize("raw_label", ["annoyance", "nervousness"])
+def test_raw_go_emotions_labels_apply_the_prior(fake_model, raw_label):
+    # Regression: raw labels the action server passes ("annoyance") had no
+    # entry in EMOTION_WEIGHTS, so the prior was silently skipped.
+    fake_model({SAFETY: 0.6, DELIVERY: 0.6})
+    calm = crit.infer_criticality_for_text("the heater smells odd", "neutral")
+    upset = crit.infer_criticality_for_text("the heater smells odd", raw_label)
     assert upset["distribution"]["high"] > calm["distribution"]["high"]
 
 
-def test_structural_rule_applies_after_model(fake_model):
-    fake_model(0.80, 0.15, 0.05)
+def test_structural_rule_overrides_low_risk_model(fake_model):
+    fake_model({QUESTION: 0.9})
     res = crit.infer_criticality_for_text("the battery caught fire", "neutral")
     assert res["criticality_level"] == "high"
     assert "+safety_rule" in res["source"]
 
 
-def test_every_result_is_explainable(fake_model):
-    fake_model(0.2, 0.6, 0.2)
+def test_risk_distribution_is_a_distribution(fake_model):
+    fake_model({SAFETY: 0.4, DELIVERY: 0.7, QUESTION: 0.3})
     res = crit.infer_criticality_for_text("my order is a bit late", "disappointed")
-    assert res["reason_code"]
-    assert res["explanation"]
-    assert set(res["distribution"]) == {"low", "medium", "high"}
+    assert sum(res["distribution"].values()) == pytest.approx(1.0)
+    assert res["reason_code"] and res["explanation"]
+
+
+# Legacy urgency strategy (CRITICALITY_STRATEGY=urgency)
+
+def test_urgency_low_stays_low(fake_model):
+    fake_model(urgency(0.85, 0.10, 0.05))
+    res = crit.infer_criticality_for_text("what are your store hours", "neutral", strategy="urgency")
+    assert res["criticality_level"] == "low"
+    assert res["source"] == "model"
+
+
+def test_urgency_high_above_threshold(fake_model):
+    fake_model(urgency(0.10, 0.15, 0.75))
+    res = crit.infer_criticality_for_text("I need this fixed today", None, strategy="urgency")
+    assert res["criticality_level"] == "high"
+
+
+def test_urgency_emotion_prior_raises_urgency(fake_model):
+    fake_model(urgency(0.45, 0.40, 0.15))
+    calm = crit.infer_criticality_for_text("my package has not arrived", "satisfied", strategy="urgency")
+    upset = crit.infer_criticality_for_text("my package has not arrived", "anxious", strategy="urgency")
+    assert upset["distribution"]["high"] > calm["distribution"]["high"]
+
+
+# ── Finance-rule negation guard ──────────────────────────────────────────────
+
+@pytest.mark.parametrize("text", [
+    "there was no unauthorized charge, I just want a copy of the invoice",
+    "I heard this might be a scam but I'm just checking",
+])
+def test_negated_finance_rule_does_not_fire(text):
+    level, suffix, _ = structural(text)
+    assert "+finance_rule" not in suffix
+
+
+def test_safety_rule_ignores_negation_words():
+    # Deliberate: a missed safety escalation is worse than a false alarm.
+    level, suffix, _ = structural("I can't believe it caught fire")
+    assert suffix == "+safety_rule"
+
+
+@pytest.mark.parametrize("text", [
+    "I have contacted you three times about a missing refund",
+    "this is the fourth time I'm writing",
+    "six emails and still no reply",
+    "I called support 5 times",
+])
+def test_repeated_contact_is_frustration(text):
+    _, suffix, _ = structural(text)
+    assert "+frustration_rule" in suffix
+
+
+@pytest.mark.parametrize("text", [
+    "it costs three times the price of the old one",
+    "I ordered this four times before and loved it",
+    "I need two emails changed on my account",
+])
+def test_repeat_lookalikes_are_not_frustration(text):
+    _, suffix, _ = structural(text)
+    assert "+frustration_rule" not in suffix

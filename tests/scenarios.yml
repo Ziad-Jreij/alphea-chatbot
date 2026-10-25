@@ -1,0 +1,33 @@
+# Conversations replayed by scripts/record_test_stories.py to (re)build
+# tests/test_stories.yml. Each scenario's transcript is printed for review:
+# only commit the regenerated stories once every reply is the correct one.
+
+scenarios:
+  - name: greeting shows the welcome menu
+    turns: ["hello"]
+  - name: refund policy FAQ
+    turns: ["what is your refund policy?"]
+  - name: shipping times FAQ
+    turns: ["how long does shipping take?"]
+  - name: order status with the ID in the first message (regression)
+    turns: ["where is my order ORD-12345"]
+  - name: order status, ID given when asked
+    turns: ["where is my order", "ORD-12345"]
+  - name: order status, invalid ID then valid ID
+    turns: ["where is my order", "ORD-1", "ORD-98765"]
+  - name: handoff request interrupts the order status form (regression)
+    turns: ["where is my order", "I want to talk to a human"]
+  - name: handoff request interrupts the return form (regression)
+    turns: ["I want to return an item", "ORD-12345", "can I speak to a real person"]
+  - name: cancel with the ID in the first message, then confirm (regression)
+    turns: ["I want to cancel order ORD-98765", "yes"]
+  - name: direct handoff request
+    turns: ["I want to talk to a human"]
+  - name: out-of-scope request mentioning 'good' (regression)
+    turns: ["could you recommend a good TV show?"]
+  # Not recorded yet: "my charger started sparking and smoking" escalates
+  # correctly, but NLU classifies it as nlu_fallback and TED improvises the
+  # escalation instead of a rule, so replay predictions are unstable. Add a
+  # safety-report intent + rule, then record it here.
+  - name: late parcel asks for the order ID without escalating
+    turns: ["my parcel is three days late"]

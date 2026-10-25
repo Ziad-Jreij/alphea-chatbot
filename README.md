@@ -117,36 +117,37 @@ The AI models run on **GPU if one is available, CPU otherwise** — no configura
 
 ### Model benchmark — criticality component
 
-`eval_criticality.py` scores models on the 240 labelled messages in [`data/eval/criticality_benchmark.yml`](data/eval/criticality_benchmark.yml) (80 per class, with negation, hearsay, contrast and "safety word" traps). It reports two modes:
+`eval_criticality.py` scores models on [`data/eval/criticality_benchmark.yml`](data/eval/criticality_benchmark.yml): 334 labelled messages split into **dev** (244, used for design and tuning) and **holdout** (90, written before the current design and only scored for reporting). Both splits are balanced across low/medium/high and include negation, hearsay, contrast and "safety word" traps. Two modes:
 
-- **raw** — the zero-shot model alone
+- **raw** — the model alone
 - **pipeline** — the production path: keyword guardrails → model → emotion prior → structural rules
 
-Results (2026-10, CPU):
+Holdout results, production pipeline (2026-10, CPU):
 
-| Model | Mode | Accuracy | Macro-F1 | HIGH precision | HIGH recall | LOW→HIGH false alarms |
-|---|---|---|---|---|---|---|
-| **DeBERTa-v3-base** (current) | pipeline | **45.0%** | **44.2%** | **78.1%** | **31.2%** | 4 |
-| DeBERTa-v3-base | raw | 43.3% | 40.9% | 72.0% | 22.5% | 1 |
-| DeBERTa-v3-xsmall | pipeline | 42.1% | 38.6% | 85.7% | 22.5% | 3 |
-| DeBERTa-v3-xsmall | raw | 34.2% | 31.5% | 45.7% | 20.0% | 16 |
+| Model | Strategy | Accuracy | Macro-F1 | HIGH precision | HIGH recall | LOW→HIGH false alarms | Median latency |
+|---|---|---|---|---|---|---|---|
+| **DeBERTa-v3-base** | **risk** (default) | **87.8%** | **87.5%** | **88.0%** | **73.3%** | 1 / 30 | 195 ms |
+| DeBERTa-v3-xsmall | risk | 78.9% | 78.8% | 80.0% | 66.7% | 3 / 30 | 56 ms |
+| DeBERTa-v3-base | urgency (original) | 37.8% | 33.4% | 50.0% | 10.0% | 1 / 30 | 107 ms |
 
-> ⚠️ **Escalation recall is the main open weakness.** In production mode the bot catches about one in three messages that should go to a human (fire, electric shock, account takeover, leaked card numbers). When it does escalate it is usually right (78% precision). Improving this is the top item on the roadmap; treat the current component as a demo, not a safety system.
+**Why the risk strategy:** the original design asked the model to rank "low / medium / high urgency", so a fire or a hacked account had to out-score every other reading of the message, and mostly didn't (10% HIGH recall). The risk strategy scores seven risk categories (safety hazard, injury, fraud, account takeover, privacy breach, medical risk, legal threat) **independently**. Any one of them above 0.70 escalates, and problem vs. routine categories split the rest. All 15 categories run in one batched forward pass.
 
-On the original 40-message thesis set, DeBERTa-v3-base scores 60.0% raw (vs 37.5% for BART-large-mnli, which it replaced). The larger set is harder and more representative. 200 of its 240 labels were drafted in October 2026 and are marked `source: draft` pending human review.
+Known misses on the holdout include a broken carbon-monoxide detector, a gas smell after an installation, a phishing request for a card PIN, and a chargeback threat. Treat escalation as decision support for agents, not a safety system.
 
-Reproduce:
+Caveats: the holdout set was scored a second time after one category was reworded in response to a *live-testing* failure (plain return requests were being escalated), not a holdout error. 290 of the 334 labels were drafted in October 2026 and are marked `source: draft` pending human review. On the original 40-message thesis set, the original urgency strategy scores 60% raw, matching the thesis result.
+
+Reproduce (dev for tuning, holdout for reporting):
 
 ```bash
 docker compose run --rm --no-deps -v "$PWD":/app -w /app rasa-actions \
-  python eval_criticality.py --show-errors --json results/criticality.json
+  python eval_criticality.py --strategies risk urgency --split holdout --show-errors
 ```
 
 ### CPU vs GPU latency
 
 | Hardware | Median latency / message | Recommended for |
 |---|---|---|
-| CPU only | ~100 ms measured on an 8-core laptop CPU; expect several times more on small cloud instances | Development, low-traffic demos |
+| CPU only | ~200 ms criticality per message measured on a 24-core laptop CPU with 8 torch threads; expect more on small cloud instances | Development, low-traffic demos |
 | NVIDIA GPU (e.g. T4) | ~30–50 ms | Production, > 10 concurrent users |
 
 **CPU is usable** for development and low-traffic demos: each user turn is scored once by the action server (emotion + criticality + ABSA), adding roughly 0.1–1 s to the reply depending on the CPU. Measure on your target hardware with `eval_criticality.py` before putting real traffic on it.
@@ -204,7 +205,7 @@ docker-compose up --build rasa-actions
 
 ### CPU-only alternative model
 
-`MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33` is ~3× smaller, but it is less accurate on the benchmark above (42% vs 45% in pipeline mode, with lower HIGH recall), so it is only worth it if memory is the constraint. Switch by setting one variable in `.env` and restarting `rasa-actions`:
+`MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33` is ~3× smaller and ~3.5× faster (56 ms vs 195 ms per message on CPU), at a cost of about 9 points of accuracy and 7 points of HIGH recall on the holdout set (see the benchmark above). Switch by setting one variable in `.env` and restarting `rasa-actions`:
 
 ```bash
 CRITICALITY_MODEL=MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33
@@ -241,6 +242,8 @@ All variables are documented in `.env.example`. Copy it to `.env` and fill in re
 | `GPU_ENABLED` | `auto` | `auto` / `true` / `false` — see [Controlling GPU usage](#controlling-gpu-usage) |
 | `TORCH_INDEX` | CPU wheels | Build-time torch index for `rasa-actions`; use `https://download.pytorch.org/whl/cu128` for GPU |
 | `PRELOAD_MODELS` | `true` | Load AI models before the action server starts listening, so the first chat doesn't time out |
+| `CRITICALITY_STRATEGY` | `risk` | `risk` scores safety/fraud/privacy/medical/legal categories independently; `urgency` is the original low/medium/high softmax |
+| `TORCH_NUM_THREADS` | min(8, cores) | CPU threads for the models; more than ~8 increases tail latency |
 | `CRITICALITY_MODEL` | `MoritzLaurer/deberta-v3-base-zeroshot-v2.0` | HuggingFace zero-shot model for criticality scoring |
 | `ORDER_PROVIDER` | `mock` | `mock` for development, `rest` for a real backend |
 | `ORDER_API_BASE_URL` | _(unset)_ | Required when `ORDER_PROVIDER=rest` |
@@ -259,7 +262,11 @@ Uses a DistilBERT model fine-tuned on the GoEmotions dataset to classify each us
 
 ### 2. Criticality & Escalation Scoring (`components/criticality.py`)
 
-Uses `MoritzLaurer/deberta-v3-base-zeroshot-v2.0` (~184 MB) via the HuggingFace zero-shot classification pipeline to score each message as **low**, **medium**, or **high urgency**. The raw model score is adjusted by an emotion prior (e.g. "frustrated" shifts probability mass toward high), then filtered through layered guardrails: YAML keyword overrides, safety/medical/finance regex rules, and structural rules for contrast phrases ("works fine but the battery caught fire"). A decay-weighted conversation-level risk score aggregates per-turn results across the session, with a false-trigger penalty that prevents a single early escalation from holding the conversation at HIGH permanently. Every decision emits a structured reason code for the audit trail.
+Scores each message as **low**, **medium** or **high** criticality with `MoritzLaurer/deberta-v3-base-zeroshot-v2.0` (~184 MB). By default (`CRITICALITY_STRATEGY=risk`) the model scores 15 descriptive categories independently: seven risk categories (fire/shock/overheating, injury, fraud, account takeover, privacy breach, medical risk, legal threat) and eight problem or routine categories. HIGH means any risk category clears 0.70. An emotion prior (e.g. "frustrated", "anxious") shifts the scores in log-odds space. Layered guardrails sit around the model:
+- YAML high keywords decide immediately; medium keywords set a floor.
+- Regex rules for safety, medical, finance, contrast ("works fine but the battery caught fire") and repeated unresolved contact. The finance rules ignore negation and hearsay ("there was no unauthorized charge", "I heard it's a scam").
+
+A decay-weighted conversation-level risk score aggregates the turns by level, with a false-trigger penalty so one early escalation doesn't hold a calm conversation at HIGH. Every decision emits a reason code and a one-sentence explanation, e.g. *"Escalated to HIGH because the model detected a safety hazard … (score 0.93)."*
 
 ### 3. Aspect-Based Sentiment Analysis (`components/absa.py`)
 
@@ -304,7 +311,7 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push a
 
 | Job | What it checks |
 |---|---|
-| Lint + unit tests | `ruff check .` and `pytest` (~140 tests, no model downloads): criticality guardrails, emotion bucketing, ABSA pairing, validators, order providers, dashboard auth/ingest/rate limiting, form and conversation-risk logic |
+| Lint + unit tests | `ruff check .` and `pytest` (~155 tests, no model downloads): criticality guardrails, emotion bucketing, ABSA pairing, validators, order providers, dashboard auth/ingest/rate limiting, form and conversation-risk logic |
 | Rasa dialogue tests | `rasa data validate`, a full `rasa train`, then `rasa test core` on [`tests/test_stories.yml`](tests/test_stories.yml) with `--fail-on-prediction-errors` |
 
 Run the same checks locally with Docker (no local Python setup needed):
@@ -319,7 +326,15 @@ docker compose run --rm --no-deps -v "$PWD/tests":/app/tests rasa \
   test core --stories tests/test_stories.yml --fail-on-prediction-errors
 ```
 
-Dependencies are pinned in [`requirements/`](requirements/) and shared by the Dockerfiles and CI. Test stories are recorded from real conversations and reviewed before they're added; see the header of `tests/test_stories.yml`.
+Dependencies are pinned in [`requirements/`](requirements/) and shared by the Dockerfiles and CI.
+
+Test stories are recorded from real conversations, not written by hand. Add a scenario to [`tests/scenarios.yml`](tests/scenarios.yml), then, with the stack running:
+
+```bash
+python3 scripts/record_test_stories.py   # prints every transcript, rewrites tests/test_stories.yml
+```
+
+Read the transcripts before committing: a recorded story asserts that the current replies are correct.
 
 ---
 
