@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] — 2026-11-22
+
+### Security
+- Dashboard dependencies upgraded to fix known vulnerabilities: Flask 3.1.3, Flask-Cors 6.0.5, PyJWT 2.15.1, gunicorn 23.0.0, prometheus-client 0.26.0. Dev tools: pytest 9.0.3, ruff 0.17.5.
+- `SECURITY.md` lists the alerts that stay open because their fixes need Python 3.11+ or a major ML-library upgrade, and why their exposure is low.
+
+### Fixed
+- Plain return and cancel requests ("I want to return an item") were scored **medium** instead of **low**. A new routine category fixes them. On the dev split, accuracy rose from 83.2% to 86.5%, with high-risk precision and recall unchanged. The holdout numbers are unchanged.
+- The `emotion_smoothing_reason` slot set by the action server was missing from the domain, so Rasa logged a warning on every turn and dropped the value.
+- Rasa 3.6.21 (patch release) in the Rasa image, and CI and the release workflow train and test with the same version.
+- Dependabot knows the project runs on Python 3.10 (`.python-version`), so it stops proposing releases that need 3.11.
+
 ## [1.0.1] — 2026-11-22
 
 ### Changed

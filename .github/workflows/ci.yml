@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      RASA_IMAGE: rasa/rasa:3.6.20-full
+      RASA_IMAGE: rasa/rasa:3.6.21-full
     steps:
       - uses: actions/checkout@v7
 
