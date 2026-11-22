@@ -11,7 +11,7 @@
 Alphea is an open-source e-commerce support bot built on [Rasa](https://rasa.com/). Every customer message goes through three AI models: **emotion detection**, **zero-shot criticality scoring** and **aspect-based sentiment analysis**. Together they decide, with a written reason, when a conversation should go to a human agent. A live agent dashboard shows every conversation as it happens, and two analytics datasets build up automatically.
 
 <p align="center">
-  <img src="docs/images/webchat.png" alt="A customer reports unauthorized card charges and Alphea hands the chat to a human agent" width="49%">
+  <img src="docs/images/shop.png" alt="The Alphea demo shop: a customer reports unauthorized card charges and Alphea hands the chat to a human agent" width="49%">
   <img src="docs/images/dashboard.png" alt="Manager overview: conversations, escalations, top complaints by aspect and emotion distribution" width="49%">
 </p>
 
@@ -68,8 +68,8 @@ On the first start the action server downloads about 700 MB of AI model weights,
 
 | Open | URL |
 |---|---|
-| **Chat with the bot** | <http://localhost:5001/webchat.html> |
-| Demo storefronts with the chat widget | [/theme1.html](http://localhost:5001/theme1.html) (shop) · [/theme2.html](http://localhost:5001/theme2.html) (bank) · [/theme3.html](http://localhost:5001/theme3.html) (SaaS support) |
+| **Demo shop with the chat widget** (best place to start) | <http://localhost:5001/shop.html> |
+| Plain full-screen chat | <http://localhost:5001/webchat.html> |
 | **Agent dashboard** (log in with the credentials from `setup.sh`) | <http://localhost:5001> |
 | Grafana (user `admin`, password `GRAFANA_PASSWORD` in `.env`) | <http://localhost:3000> |
 | Rasa HTTP API (needs `?token=$RASA_AUTH_TOKEN`) | <http://localhost:5005> |
@@ -93,7 +93,7 @@ To stop the stack, run `docker compose down`. Add `-v` to also delete the databa
 
 ## Things to try
 
-Open the chat and type:
+Open the [demo shop](http://localhost:5001/shop.html) and click one of the messages under **Try the assistant**, or type them into the chat:
 
 | Message | What happens |
 |---|---|
@@ -264,7 +264,7 @@ actions/            Rasa custom actions: forms, order flows, escalation, dashboa
 components/         emotion.py, criticality.py, absa.py (the three AI components)
 integrations/       Order providers (mock, REST) and input validators
 dashboard/          Flask API + agent dashboard and login pages
-webchat/            Chat widget page and three demo storefronts
+webchat/            Demo shop (shop.html) and the plain full-screen chat page
 data/               Rasa NLU, rules and stories; criticality keywords; eval/ benchmark
 tests/              Unit tests (tests/unit), recorded dialogue tests, scenarios
 scripts/            setup.sh, eval_criticality.py, record_test_stories.py
@@ -303,7 +303,7 @@ Build from your working tree with `docker compose up -d --build`. See [CONTRIBUT
 | `dashboard` keeps restarting and its logs say *Insecure dashboard configuration* | A secret in `.env` is empty, too short or a default. Run `scripts/setup.sh`. |
 | The bot never replies, and `docker compose logs rasa` mentions no model | `./models` is empty. Train one (see [Quick start](#quick-start)) or rerun `scripts/setup.sh` to download it, then `docker compose restart rasa`. |
 | `rasa train` fails with a permission error on `./models` | Run it with `--user "$(id -u):0"` as shown. If `./models` was created by root, run `sudo chown -R $USER models`. |
-| The chat widget doesn't connect | Rasa must be reachable on port 5005 of the same host as the page. Check `docker compose ps` and `RASA_CORS_ORIGINS`. |
+| The chat widget doesn't connect, or the shop says the chat is still loading | Rasa must be reachable on port 5005 of the same host as the page. Check `docker compose ps` and `RASA_CORS_ORIGINS`. |
 | Port 5001, 5005 or 5432 is already in use | Stop the other service, or change the host side of the mapping in `docker-compose.yml`. |
 | `docker compose pull` says *denied* | The pre-built images aren't published for that version. `docker compose up` builds them locally instead. |
 

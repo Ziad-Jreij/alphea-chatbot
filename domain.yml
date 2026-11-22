@@ -474,7 +474,7 @@ responses:
   # Fallback
   utter_default:
     - text: >
-        Is there anything else i can do for you in the meantime? 
+        Is there anything else I can do for you in the meantime? 
       buttons:
         - title: "Track my order"
           payload: "/ask_order_status"

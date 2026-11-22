@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Alphea Store · Demo shop with the Alphea assistant</title>
+  <meta name="description" content="A demo electronics store for trying the Alphea customer service chatbot." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%234f46e5'/><path d='M9 23 16 8l7 15h-4l-3-7-3 7z' fill='white'/></svg>">
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #12131a;
+      --ink-2: #3d4150;
+      --muted: #6b7080;
+      --line: #e7e8ee;
+      --bg: #f6f6f9;
+      --card: #ffffff;
+      --accent: #4f46e5;
+      --accent-ink: #3730a3;
+      --accent-soft: #eef0ff;
+      --good: #15803d;
+      --warn: #b45309;
+      --bad: #b91c1c;
+      --radius: 14px;
+      --shadow: 0 1px 2px rgba(18, 19, 26, .04), 0 4px 16px rgba(18, 19, 26, .06);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink);
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; cursor: pointer; }
+    .container { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+
+    /* ── Demo notice ─────────────────────────────────────────── */
+    .notice { background: var(--ink); color: #d9dbe6; font-size: 13px; text-align: center; padding: 8px 16px; }
+    .notice b { color: #fff; }
+    .notice a { color: #b7b3ff; text-decoration: underline; }
+
+    /* ── Header ──────────────────────────────────────────────── */
+    header.site { background: #fff; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20; }
+    .bar { display: flex; align-items: center; gap: 24px; height: 68px; }
+    .logo { display: flex; align-items: center; gap: 10px; font-weight: 750; font-size: 19px; letter-spacing: -.01em; }
+    .logo svg { width: 30px; height: 30px; }
+    nav.cats { display: flex; gap: 20px; font-size: 14.5px; color: var(--ink-2); }
+    nav.cats a:hover { color: var(--accent); }
+    .search { flex: 1; max-width: 360px; margin-left: auto; position: relative; }
+    .search input {
+      width: 100%; height: 40px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg);
+      padding: 0 16px 0 40px; font: inherit; font-size: 14px; color: var(--ink);
+    }
+    .search svg { position: absolute; left: 14px; top: 11px; width: 18px; height: 18px; color: var(--muted); }
+    .icon-btn {
+      position: relative; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px;
+      border-radius: 999px; border: 1px solid var(--line); background: #fff; color: var(--ink); font-size: 14px;
+    }
+    .icon-btn svg { width: 18px; height: 18px; }
+    .cart-count {
+      min-width: 20px; height: 20px; border-radius: 999px; background: var(--accent); color: #fff;
+      font-size: 12px; font-weight: 700; display: inline-grid; place-items: center; padding: 0 6px;
+    }
+
+    /* ── Hero ────────────────────────────────────────────────── */
+    .hero { display: grid; grid-template-columns: 1.15fr .85fr; gap: 28px; margin: 28px auto 8px; }
+    .hero-main {
+      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 55%, #4f46e5 100%); color: #fff;
+      border-radius: 20px; padding: 40px; position: relative; overflow: hidden; min-height: 300px;
+    }
+    .hero-main .eyebrow { display: inline-block; font-size: 12.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; background: rgba(255,255,255,.14); padding: 5px 10px; border-radius: 999px; }
+    .hero-main h1 { font-size: 38px; line-height: 1.12; margin: 16px 0 12px; letter-spacing: -.02em; max-width: 16ch; }
+    .hero-main p { color: #d6d4ff; max-width: 44ch; margin: 0 0 24px; }
+    .hero-main .cta { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn { height: 44px; padding: 0 20px; border-radius: 999px; border: 0; font-weight: 600; font-size: 14.5px; display: inline-flex; align-items: center; gap: 8px; }
+    .btn-light { background: #fff; color: var(--ink); }
+    .btn-ghost { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.3); }
+    .btn-accent { background: var(--accent); color: #fff; }
+    .btn-accent:hover { background: var(--accent-ink); }
+    .hero-art { position: absolute; right: -10px; bottom: -14px; width: 300px; opacity: .95; }
+
+    .assistant-card { background: var(--card); border-radius: 20px; padding: 26px; box-shadow: var(--shadow); border: 1px solid var(--line); display: flex; flex-direction: column; }
+    .assistant-card .who { display: flex; align-items: center; gap: 12px; }
+    .avatar { width: 44px; height: 44px; border-radius: 12px; background: var(--accent-soft); display: grid; place-items: center; }
+    .avatar svg { width: 26px; height: 26px; }
+    .online { font-size: 12.5px; color: var(--good); display: flex; align-items: center; gap: 6px; }
+    .online::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px #dcfce7; }
+    .assistant-card h2 { font-size: 18px; margin: 0; }
+    .assistant-card ul { list-style: none; padding: 0; margin: 18px 0; display: grid; gap: 10px; }
+    .assistant-card li { display: flex; gap: 10px; font-size: 14px; color: var(--ink-2); }
+    .assistant-card li svg { flex: none; width: 18px; height: 18px; color: var(--accent); margin-top: 2px; }
+    .sample { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 8px; margin-bottom: 18px; font-size: 13.5px; }
+    .msg { max-width: 85%; padding: 8px 12px; border-radius: 14px; line-height: 1.4; }
+    .msg.me { justify-self: end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+    .msg.bot { justify-self: start; background: #fff; border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+    .flag { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+    section, #try { scroll-margin-top: 84px; }
+    .assistant-card .actions { margin-top: auto; display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn-outline { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+
+    /* ── Perks strip ─────────────────────────────────────────── */
+    .perks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 22px auto 8px; }
+    .perk { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: flex; gap: 12px; align-items: center; font-size: 13.5px; color: var(--ink-2); }
+    .perk svg { width: 22px; height: 22px; color: var(--accent); flex: none; }
+    .perk b { display: block; color: var(--ink); font-size: 14px; }
+
+    /* ── Sections ────────────────────────────────────────────── */
+    section { margin: 44px auto; }
+    .section-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .section-head h2 { font-size: 24px; margin: 0; letter-spacing: -.01em; }
+    .section-head p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip { height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: #fff; color: var(--ink-2); font-size: 13.5px; }
+    .chip[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+    /* ── Products ────────────────────────────────────────────── */
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 18px; }
+    .product { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: transform .15s, box-shadow .15s; }
+    .product:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+    .product .art { aspect-ratio: 5 / 4; display: grid; place-items: center; position: relative; }
+    .product .art svg { width: 72%; height: auto; }
+    .badge { position: absolute; top: 12px; left: 12px; font-size: 11.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: 4px 9px; border-radius: 999px; background: #fff; color: var(--ink); }
+    .badge.sale { background: #fee2e2; color: var(--bad); }
+    .badge.new { background: #dcfce7; color: var(--good); }
+    .product .body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .product .cat { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+    .product h3 { font-size: 15.5px; margin: 0; line-height: 1.3; }
+    .rating { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+    .stars { color: #f59e0b; letter-spacing: 1px; }
+    .ship { font-size: 12.5px; color: var(--good); }
+    .buy { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 8px; }
+    .price { font-size: 18px; font-weight: 750; }
+    .price s { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+    .add { height: 36px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--ink); color: #fff; font-size: 13.5px; font-weight: 600; }
+    .add:hover { background: var(--accent); }
+
+    /* ── Try the assistant ───────────────────────────────────── */
+    .try { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 28px; }
+    .scenarios { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .scenario { text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; transition: border-color .15s, background .15s; }
+    .scenario:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .scenario .say { font-weight: 600; font-size: 14.5px; color: var(--ink); }
+    .scenario .what { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+    .tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; }
+    .tag.low { background: #dcfce7; color: var(--good); }
+    .tag.med { background: #fef3c7; color: var(--warn); }
+    .tag.high { background: #fee2e2; color: var(--bad); }
+    .try-foot { margin-top: 22px; display: grid; grid-template-columns: 1.2fr .8fr; gap: 22px; }
+    table.orders { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    table.orders th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); }
+    table.orders td { padding: 10px; border-bottom: 1px solid var(--line); }
+    table.orders tr:last-child td { border-bottom: 0; }
+    .oid { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 600; color: var(--accent); background: none; border: 0; padding: 0; font-size: 13.5px; }
+    .oid:hover { text-decoration: underline; }
+    .status { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+    .s-shipped { background: #dbeafe; color: #1d4ed8; }
+    .s-processing { background: #fef3c7; color: var(--warn); }
+    .s-delivered { background: #dcfce7; color: var(--good); }
+    .s-hold { background: #f3e8ff; color: #7e22ce; }
+    .behind { background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; font-size: 14px; color: var(--ink-2); }
+    .behind h3 { font-size: 15px; margin: 0 0 8px; color: var(--ink); }
+    .behind ol { margin: 8px 0 14px; padding-left: 18px; }
+    .behind li { margin: 4px 0; }
+    .mini-title { font-size: 15px; margin: 0 0 6px; }
+
+    /* ── Footer ──────────────────────────────────────────────── */
+    footer { background: #fff; border-top: 1px solid var(--line); margin-top: 56px; padding: 36px 0 28px; font-size: 13.5px; color: var(--muted); }
+    .foot-grid { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 24px; }
+    footer h4 { color: var(--ink); font-size: 13.5px; margin: 0 0 10px; }
+    footer ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+    footer .fine { border-top: 1px solid var(--line); margin-top: 26px; padding-top: 16px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+    /* ── Toast ───────────────────────────────────────────────── */
+    .toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 20px); opacity: 0; background: var(--ink); color: #fff; padding: 11px 18px; border-radius: 999px; font-size: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.2); transition: opacity .2s, transform .2s; z-index: 50; pointer-events: none; max-width: calc(100% - 32px); text-align: center; }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    /* ── Chat widget theming (rasa-webchat) ──────────────────── */
+    .rw-launcher { background-color: var(--accent) !important; box-shadow: 0 8px 24px rgba(79, 70, 229, .35) !important; }
+    .rw-conversation-container .rw-header { background-color: var(--accent) !important; }
+    .rw-conversation-container .rw-client { background-color: var(--accent) !important; color: #fff !important; }
+    .rw-conversation-container .rw-response { background-color: #f1f2f6 !important; color: var(--ink) !important; }
+    .rw-conversation-container .rw-reply { border-color: var(--accent) !important; color: var(--accent) !important; background: #fff !important; }
+    .rw-conversation-container .rw-reply:hover { background: var(--accent-soft) !important; }
+    .rw-conversation-container .rw-sender { border-top: 1px solid var(--line) !important; }
+
+    /* ── Responsive ──────────────────────────────────────────── */
+    @media (max-width: 980px) {
+      nav.cats { display: none; }
+      .hero { grid-template-columns: 1fr; }
+      .perks { grid-template-columns: repeat(2, 1fr); }
+      .scenarios { grid-template-columns: repeat(2, 1fr); }
+      .try-foot { grid-template-columns: 1fr; }
+      .foot-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 620px) {
+      .container { padding: 0 16px; }
+      .bar { gap: 10px; height: 60px; }
+      .search { display: none; }
+      .logo span.word { font-size: 17px; }
+      .icon-btn .label { display: none; }
+      .icon-btn { margin-left: auto; }
+      .hero-main { padding: 28px 22px; min-height: 0; }
+      .hero-main h1 { font-size: 29px; }
+      .hero-art { display: none; }
+      .perks { grid-template-columns: 1fr; }
+      .scenarios { grid-template-columns: 1fr; }
+      .try { padding: 20px 16px; }
+      table.orders th:nth-child(2), table.orders td:nth-child(2) { display: none; }
+      .foot-grid { grid-template-columns: 1fr; }
+      .hide-sm, .rev { display: none; }
+      .grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+      .product .art svg { width: 80%; }
+      .product .body { padding: 10px 12px 12px; }
+      .product h3 { font-size: 14px; }
+      .product .rating, .product .ship { font-size: 12px; }
+      .buy { flex-direction: column; align-items: stretch; gap: 8px; }
+      .price { font-size: 16px; }
+      .add { width: 100%; }
+      .badge { top: 8px; left: 8px; font-size: 10.5px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="notice">
+    <b>Demo store.</b> Nothing here is for sale, and no real orders or payments are processed.
+    <span class="hide-sm">Chat with <b>Alphea</b>, the support assistant, in the bottom-right corner.</span> <a href="#try">See what to try</a>.
+  </div>
+
+  <header class="site">
+    <div class="container bar">
+      <a class="logo" href="#" aria-label="Alphea Store home">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#4f46e5"/><path d="M9 23 16 8l7 15h-4l-3-7-3 7z" fill="#fff"/></svg>
+        <span class="word">Alphea Store</span>
+      </a>
+      <nav class="cats" aria-label="Categories">
+        <a href="#shop" data-cat="audio">Audio</a>
+        <a href="#shop" data-cat="wearables">Wearables</a>
+        <a href="#shop" data-cat="computing">Computing</a>
+        <a href="#shop" data-cat="accessories">Accessories</a>
+      </nav>
+      <form class="search" role="search" onsubmit="event.preventDefault(); toast('Search is disabled in the demo. Try asking Alphea instead.');">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="search" placeholder="Search headphones, laptops, chargers…" aria-label="Search products" />
+      </form>
+      <button class="icon-btn" type="button" onclick="toast('Checkout is disabled in the demo. Ask Alphea about an order instead.')" aria-label="Cart">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6.2"/><circle cx="10" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/></svg>
+        <span class="label">Cart</span>
+        <span class="cart-count" id="cartCount">0</span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <div class="container hero">
+      <div class="hero-main">
+        <span class="eyebrow">Winter sale · up to 30% off</span>
+        <h1>Tech you'll love, support that listens.</h1>
+        <p>Headphones, wearables and laptops with free returns for 30 days, plus a support assistant that knows when to bring in a human.</p>
+        <div class="cta">
+          <a class="btn btn-light" href="#shop">Shop the sale</a>
+          <button class="btn btn-ghost" type="button" data-say="where is my order">Track an order</button>
+        </div>
+        <svg class="hero-art" viewBox="0 0 300 220" aria-hidden="true">
+          <defs><linearGradient id="hg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#a5b4fc"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs>
+          <path d="M70 130a80 80 0 0 1 160 0" fill="none" stroke="#c7d2fe" stroke-width="16" stroke-linecap="round"/>
+          <rect x="44" y="118" width="52" height="84" rx="22" fill="url(#hg)"/>
+          <rect x="204" y="118" width="52" height="84" rx="22" fill="url(#hg)"/>
+          <rect x="58" y="134" width="24" height="52" rx="12" fill="#312e81" opacity=".35"/>
+          <rect x="218" y="134" width="24" height="52" rx="12" fill="#312e81" opacity=".35"/>
+        </svg>
+      </div>
+
+      <aside class="assistant-card" aria-label="Support assistant">
+        <div class="who">
+          <div class="avatar"><svg viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01" stroke-linecap="round"/></svg></div>
+          <div><h2>Need help? Ask Alphea</h2><div class="online">Online now · replies instantly</div></div>
+        </div>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Track orders, start returns, change your address</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Notices frustration, and takes safety and fraud reports seriously</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Hands you to a human agent whenever it should</li>
+        </ul>
+        <div class="sample" aria-label="Example conversation">
+          <div class="msg me">My new charger started sparking and smoking!</div>
+          <div class="msg bot">Got it. I’ll connect you to a human agent now. Please stay in the chat, and they’ll review this conversation so you don’t have to repeat everything.</div>
+          <div class="flag"><span class="tag high">High</span> Safety hazard detected · escalated to an agent</div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-accent" type="button" data-open>Start a chat</button>
+          <a class="btn btn-outline" href="#try">What to try</a>
+        </div>
+      </aside>
+    </div>
+
+    <div class="container perks">
+      <div class="perk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg><div><b>Free delivery</b>On orders over €50</div></div>
+      <div class="perk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><div><b>30-day returns</b>No questions asked</div></div>
+      <div class="perk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.4 8.4 8 9 4.6-.6 8-4 8-9V6z"/></svg><div><b>2-year warranty</b>On every device</div></div>
+      <div class="perk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg><div><b>24/7 support</b>Alphea, plus human agents</div></div>
+    </div>
+
+    <section class="container" id="shop">
+      <div class="section-head">
+        <div><h2>Popular right now</h2><p>Hand-picked deals across our best-selling categories.</p></div>
+        <div class="chips" role="group" aria-label="Filter by category">
+          <button class="chip" type="button" data-filter="all" aria-pressed="true">All</button>
+          <button class="chip" type="button" data-filter="audio" aria-pressed="false">Audio</button>
+          <button class="chip" type="button" data-filter="wearables" aria-pressed="false">Wearables</button>
+          <button class="chip" type="button" data-filter="computing" aria-pressed="false">Computing</button>
+          <button class="chip" type="button" data-filter="accessories" aria-pressed="false">Accessories</button>
+        </div>
+      </div>
+      <div class="grid" id="grid"></div>
+    </section>
+
+    <section class="container" id="try">
+      <div class="try">
+        <div class="section-head">
+          <div>
+            <h2>Try the assistant</h2>
+            <p>Click a message to send it to Alphea, or type your own in the chat. The tag shows the criticality Alphea should detect.</p>
+          </div>
+        </div>
+        <div class="scenarios" id="scenarios"></div>
+
+        <div class="try-foot">
+          <div>
+            <h3 class="mini-title">Demo orders</h3>
+            <p style="margin:0 0 8px;color:var(--muted);font-size:13.5px">Use these order numbers or emails when Alphea asks. Click an order number to ask about it.</p>
+            <table class="orders">
+              <thead><tr><th>Order</th><th>Email</th><th>Status</th><th>Total</th></tr></thead>
+              <tbody>
+                <tr><td><button class="oid" type="button" data-say="where is my order ORD-12345">ORD-12345</button></td><td>alex@example.com</td><td><span class="status s-shipped">Shipped</span></td><td>€89.90</td></tr>
+                <tr><td><button class="oid" type="button" data-say="where is my order ORD-98765">ORD-98765</button></td><td>maria@example.com</td><td><span class="status s-processing">Processing</span></td><td>€149.50</td></tr>
+                <tr><td><button class="oid" type="button" data-say="where is my order ORD-55555">ORD-55555</button></td><td>john@example.com</td><td><span class="status s-delivered">Delivered</span></td><td>€59.00</td></tr>
+                <tr><td><button class="oid" type="button" data-say="where is my order ORD-77777">ORD-77777</button></td><td>sofia@example.com</td><td><span class="status s-hold">On hold</span></td><td>€220.00</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="behind">
+            <h3>What happens behind the scenes</h3>
+            For every message you send, Alphea:
+            <ol>
+              <li>detects your <b>emotion</b> (frustrated, anxious, satisfied, …)</li>
+              <li>scores <b>criticality</b>: safety, fraud, privacy, medical and legal risks escalate</li>
+              <li>picks out <b>what you're talking about</b> (battery, delivery, support, …) and how you feel about it</li>
+            </ol>
+            Open the <a href="/" style="color:var(--accent);font-weight:600">agent dashboard</a> in another tab to watch your conversation appear live.
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <div class="foot-grid">
+        <div>
+          <a class="logo" href="#" aria-label="Alphea Store home" style="margin-bottom:10px">
+            <svg viewBox="0 0 32 32" aria-hidden="true" style="width:26px;height:26px"><rect width="32" height="32" rx="8" fill="#4f46e5"/><path d="M9 23 16 8l7 15h-4l-3-7-3 7z" fill="#fff"/></svg>
+            <span style="font-size:16px">Alphea Store</span>
+          </a>
+          <p style="margin:0;max-width:34ch">A demo shop for the open-source Alphea customer service chatbot.</p>
+        </div>
+        <div><h4>Help</h4><ul><li><a href="#" data-say="how long does shipping take?">Shipping</a></li><li><a href="#" data-say="what is your refund policy?">Returns &amp; refunds</a></li><li><a href="#" data-say="where is my order">Order status</a></li></ul></div>
+        <div><h4>Account</h4><ul><li><a href="#" data-say="I forgot my password">Reset password</a></li><li><a href="#" data-say="I want to change my delivery address">Change address</a></li><li><a href="#" data-say="I want to cancel my order">Cancel an order</a></li></ul></div>
+        <div><h4>Contact</h4><ul><li><a href="#" data-say="what are your store hours?">Store hours</a></li><li><a href="#" data-say="how can I contact you?">Contact options</a></li><li><a href="#" data-say="I want to talk to a human">Talk to a person</a></li></ul></div>
+      </div>
+      <div class="fine">
+        <span>Demo store · no real products, orders, payments or personal data.</span>
+        <span>Powered by Alphea · MIT licensed</span>
+      </div>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div id="webchat"></div>
+
+  <script>
+    // ── Product art (inline SVG, no external images) ──────────────────────────
+    const ART = {
+      headphones: `<svg viewBox="0 0 200 160" role="img" aria-label="Headphones"><path d="M50 96a50 50 0 0 1 100 0" fill="none" stroke="#1f2937" stroke-width="10" stroke-linecap="round"/><rect x="34" y="86" width="34" height="56" rx="15" fill="#374151"/><rect x="132" y="86" width="34" height="56" rx="15" fill="#374151"/><rect x="43" y="98" width="16" height="32" rx="8" fill="#9ca3af"/><rect x="141" y="98" width="16" height="32" rx="8" fill="#9ca3af"/></svg>`,
+      earbuds: `<svg viewBox="0 0 200 160" role="img" aria-label="Wireless earbuds in a case"><rect x="52" y="70" width="96" height="64" rx="28" fill="#f9fafb" stroke="#d1d5db" stroke-width="3"/><path d="M52 96h96" stroke="#d1d5db" stroke-width="3"/><circle cx="100" cy="112" r="3" fill="#22c55e"/><g fill="#f9fafb" stroke="#9ca3af" stroke-width="3"><circle cx="78" cy="44" r="14"/><circle cx="122" cy="44" r="14"/></g><rect x="74" y="50" width="8" height="26" rx="4" fill="#e5e7eb"/><rect x="118" y="50" width="8" height="26" rx="4" fill="#e5e7eb"/></svg>`,
+      speaker: `<svg viewBox="0 0 200 160" role="img" aria-label="Portable speaker"><rect x="40" y="52" width="120" height="66" rx="33" fill="#0f766e"/><rect x="40" y="52" width="120" height="66" rx="33" fill="none" stroke="#115e59" stroke-width="3"/><g fill="#134e4a">${Array.from({length: 5}, (_, r) => Array.from({length: 11}, (_, c) => `<circle cx="${58 + c * 8.4}" cy="${68 + r * 8.5}" r="2"/>`).join("")).join("")}</g><rect x="88" y="118" width="24" height="6" rx="3" fill="#115e59"/></svg>`,
+      watch: `<svg viewBox="0 0 200 160" role="img" aria-label="Smartwatch"><rect x="80" y="10" width="40" height="40" rx="10" fill="#f97316"/><rect x="80" y="110" width="40" height="40" rx="10" fill="#f97316"/><rect x="64" y="38" width="72" height="84" rx="20" fill="#111827"/><rect x="72" y="46" width="56" height="68" rx="14" fill="#1f2937"/><text x="100" y="78" text-anchor="middle" font-family="system-ui" font-size="17" font-weight="700" fill="#f9fafb">10:09</text><text x="100" y="96" text-anchor="middle" font-family="system-ui" font-size="9" fill="#fb923c">♥ 72 bpm</text><rect x="136" y="70" width="6" height="16" rx="3" fill="#374151"/></svg>`,
+      laptop: `<svg viewBox="0 0 200 160" role="img" aria-label="Laptop"><rect x="44" y="30" width="112" height="76" rx="7" fill="#1f2937"/><rect x="51" y="37" width="98" height="62" rx="3" fill="#6366f1"/><path d="M51 99l40-34 22 18 14-11 22 27z" fill="#818cf8"/><circle cx="128" cy="54" r="8" fill="#c7d2fe"/><path d="M28 110h144l-8 12H36z" fill="#9ca3af"/><rect x="88" y="110" width="24" height="4" rx="2" fill="#6b7280"/></svg>`,
+      keyboard: `<svg viewBox="0 0 200 160" role="img" aria-label="Mechanical keyboard"><rect x="22" y="50" width="156" height="66" rx="10" fill="#e5e7eb" stroke="#9ca3af" stroke-width="3"/><g fill="#fff" stroke="#cbd5e1" stroke-width="1.5">${Array.from({length: 3}, (_, r) => Array.from({length: 12}, (_, c) => `<rect x="${31 + c * 11.8}" y="${58 + r * 13}" width="9.5" height="10" rx="2"/>`).join("")).join("")}<rect x="60" y="98" width="80" height="10" rx="2"/></g><rect x="31" y="98" width="24" height="10" rx="2" fill="#4f46e5"/><rect x="145" y="98" width="24" height="10" rx="2" fill="#4f46e5"/></svg>`,
+      charger: `<svg viewBox="0 0 200 160" role="img" aria-label="Fast charger with cable"><rect x="58" y="36" width="56" height="70" rx="12" fill="#f9fafb" stroke="#d1d5db" stroke-width="3"/><rect x="72" y="18" width="7" height="20" rx="2" fill="#9ca3af"/><rect x="93" y="18" width="7" height="20" rx="2" fill="#9ca3af"/><path d="M90 60l-8 14h9l-6 14 14-18h-9l6-10z" fill="#4f46e5"/><path d="M86 106c0 26 18 30 34 30s34-4 34-30V84" fill="none" stroke="#d1d5db" stroke-width="5" stroke-linecap="round"/><rect x="146" y="64" width="16" height="22" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/></svg>`,
+      backpack: `<svg viewBox="0 0 200 160" role="img" aria-label="Laptop backpack"><path d="M80 28a20 20 0 0 1 40 0" fill="none" stroke="#334155" stroke-width="7"/><rect x="56" y="28" width="88" height="118" rx="26" fill="#475569"/><rect x="70" y="88" width="60" height="44" rx="12" fill="#334155"/><path d="M70 104h60" stroke="#64748b" stroke-width="3"/><rect x="94" y="96" width="12" height="4" rx="2" fill="#f59e0b"/><path d="M64 52c-14 8-14 70 0 80M136 52c14 8 14 70 0 80" fill="none" stroke="#1e293b" stroke-width="5"/></svg>`,
+    };
+
+    const PRODUCTS = [
+      { name: "Aura ANC Wireless Headphones", cat: "audio", art: "headphones", bg: "#eef2ff", price: 129.99, was: 179.99, rating: 4.7, reviews: 1284, badge: ["sale", "-28%"], ship: "Free 2–3 day delivery" },
+      { name: "Pulse Pro Smartwatch, 44 mm", cat: "wearables", art: "watch", bg: "#fff7ed", price: 199.00, rating: 4.5, reviews: 642, badge: ["", "Best seller"], ship: "Free 2–3 day delivery" },
+      { name: "Nova 14\" Ultrabook, 16 GB / 512 GB", cat: "computing", art: "laptop", bg: "#eef2ff", price: 899.00, was: 1049.00, rating: 4.8, reviews: 377, badge: ["sale", "-14%"], ship: "Free next-day delivery" },
+      { name: "Echo Buds True Wireless Earbuds", cat: "audio", art: "earbuds", bg: "#f0fdf4", price: 79.99, rating: 4.4, reviews: 2150, badge: ["new", "New"], ship: "Free 2–3 day delivery" },
+      { name: "Wave Mini Bluetooth Speaker", cat: "audio", art: "speaker", bg: "#f0fdfa", price: 49.99, was: 64.99, rating: 4.6, reviews: 913, badge: ["sale", "-23%"], ship: "Delivery in 3–5 days" },
+      { name: "VoltMax 65 W USB-C Fast Charger", cat: "accessories", art: "charger", bg: "#f8fafc", price: 34.99, rating: 4.3, reviews: 488, badge: null, ship: "Delivery in 3–5 days" },
+      { name: "Keyline Low-Profile Mechanical Keyboard", cat: "computing", art: "keyboard", bg: "#f5f3ff", price: 109.00, rating: 4.6, reviews: 305, badge: ["new", "New"], ship: "Free 2–3 day delivery" },
+      { name: "Transit 15.6\" Laptop Backpack", cat: "accessories", art: "backpack", bg: "#f1f5f9", price: 59.00, rating: 4.5, reviews: 721, badge: null, ship: "Delivery in 3–5 days" },
+    ];
+
+    const SCENARIOS = [
+      { say: "Where is my order ORD-12345?", what: "Order lookup", level: "low" },
+      { say: "I want to return an item", what: "Return form with order-ID check", level: "low" },
+      { say: "My headphones arrived damaged", what: "Damage report", level: "med" },
+      { say: "I love the design but the battery is awful", what: "Mixed feedback, split by aspect", level: "med" },
+      { say: "My charger started sparking and smoking", what: "Safety hazard → human agent", level: "high" },
+      { say: "Someone used my credit card without permission", what: "Fraud → human agent", level: "high" },
+    ];
+
+    const eur = (n) => "€" + n.toFixed(2);
+    const stars = (r) => "★★★★★".slice(0, Math.round(r)) + "☆☆☆☆☆".slice(0, 5 - Math.round(r));
+
+    function renderProducts(filter = "all") {
+      document.getElementById("grid").innerHTML = PRODUCTS.filter((p) => filter === "all" || p.cat === filter).map((p) => `
+        <article class="product">
+          <div class="art" style="background:${p.bg}">${p.badge ? `<span class="badge ${p.badge[0]}">${p.badge[1]}</span>` : ""}${ART[p.art]}</div>
+          <div class="body">
+            <span class="cat">${p.cat}</span>
+            <h3>${p.name}</h3>
+            <div class="rating"><span class="stars" aria-label="${p.rating} out of 5">${stars(p.rating)}</span>${p.rating}<span class="rev"> · ${p.reviews.toLocaleString("en")} reviews</span></div>
+            <div class="ship">${p.ship}</div>
+            <div class="buy"><span class="price">${eur(p.price)}${p.was ? `<s>${eur(p.was)}</s>` : ""}</span><button class="add" type="button" data-add="${p.name}">Add to cart</button></div>
+          </div>
+        </article>`).join("");
+    }
+
+    function renderScenarios() {
+      const label = { low: "Low", med: "Medium", high: "High" };
+      document.getElementById("scenarios").innerHTML = SCENARIOS.map((s) => `
+        <button class="scenario" type="button" data-say="${s.say.replace(/"/g, "&quot;")}">
+          <span class="say">“${s.say}”</span>
+          <span class="what"><span class="tag ${s.level}">${label[s.level]}</span>${s.what}</span>
+        </button>`).join("");
+    }
+
+    // ── Small UI helpers ─────────────────────────────────────────────────────
+    let toastTimer;
+    function toast(msg) {
+      const t = document.getElementById("toast");
+      t.textContent = msg; t.classList.add("show");
+      clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+    }
+    let cart = 0;
+
+    function setFilter(cat) {
+      document.querySelectorAll("[data-filter]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.filter === cat)));
+      renderProducts(cat);
+    }
+
+    // ── Chat helpers: open the widget and send a message as the customer ─────
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    async function openChat() {
+      for (let i = 0; i < 40 && !document.querySelector(".rw-launcher, .rw-new-message"); i++) await sleep(150);
+      if (!document.querySelector(".rw-new-message")) {
+        const launcher = document.querySelector(".rw-launcher");
+        if (!launcher) { toast("The chat is still loading. Is the Rasa server running?"); return null; }
+        launcher.click();
+      }
+      for (let i = 0; i < 40 && !document.querySelector(".rw-new-message"); i++) await sleep(100);
+      return document.querySelector(".rw-new-message");
+    }
+    async function sendToChat(text) {
+      const input = await openChat();
+      if (!input) return;
+      await sleep(350);
+      const proto = Object.getPrototypeOf(input);
+      Object.getOwnPropertyDescriptor(proto, "value").set.call(input, text);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      const send = document.querySelector(".rw-send");
+      const form = input.closest("form");
+      if (send && !send.disabled) send.click();
+      else if (form) form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    }
+
+    document.addEventListener("click", (e) => {
+      const say = e.target.closest("[data-say]");
+      if (say) { e.preventDefault(); sendToChat(say.dataset.say); return; }
+      if (e.target.closest("[data-open]")) { openChat(); return; }
+      const add = e.target.closest("[data-add]");
+      if (add) { cart++; document.getElementById("cartCount").textContent = cart; toast(`Added “${add.dataset.add}” to your cart (demo)`); return; }
+      const f = e.target.closest("[data-filter]");
+      if (f) { setFilter(f.dataset.filter); return; }
+      const nav = e.target.closest("nav.cats [data-cat]");
+      if (nav) { setFilter(nav.dataset.cat); }
+    });
+
+    renderProducts();
+    renderScenarios();
+
+    // ── Rasa webchat widget ──────────────────────────────────────────────────
+    function boot() {
+      if (!window.WebChat || !window.WebChat.default) { console.error("rasa-webchat not loaded"); return; }
+      window.WebChat.default({
+        selector: "#webchat",
+        initPayload: "/greet",
+        // Rasa runs on port 5005 of the same host. Set window.__RASA_URL__ before this script to override.
+        socketUrl: window.__RASA_URL__ || (window.location.protocol + "//" + window.location.hostname + ":5005"),
+        socketPath: "/socket.io/",
+        title: "Alphea",
+        subtitle: "Alphea Store support",
+        inputTextFieldHint: "Type your message…",
+        showFullScreenButton: true,
+        showCloseButton: true,
+        params: { storage: "session" },
+        socketOptions: { transports: ["polling"] },
+      }, null);
+    }
+    (function loadWidget() {
+      const s1 = document.createElement("script");
+      s1.src = "https://cdn.jsdelivr.net/npm/rasa-webchat@1.0.1/lib/index.js";
+      s1.async = true;
+      s1.onload = boot;
+      s1.onerror = function () {
+        const s2 = document.createElement("script");
+        s2.src = "https://unpkg.com/rasa-webchat@1.0.1/lib/index.js";
+        s2.async = true;
+        s2.onload = boot;
+        s2.onerror = () => console.error("Failed to load rasa-webchat from both CDNs");
+        document.head.appendChild(s2);
+      };
+      document.head.appendChild(s1);
+    })();
+  </script>
+</body>
+</html>

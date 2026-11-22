@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] — 2026-11-22
+
+### Changed
+- The three demo themes from the thesis (shop, bank, SaaS portal) are replaced by one realistic demo shop, `webchat/shop.html`. It has product cards, a cart, one-click test scenarios for the assistant, the demo order numbers, and a link to the agent dashboard. It works on mobile.
+- Fixed a lowercase "i" in a bot reply.
+
 ## [1.0.0] — 2026-11-22: first public release
 
 ### Added
