@@ -2,7 +2,7 @@
 # the PyTorch index (CPU or CUDA wheels), see docker/Dockerfile.actions.
 rasa-sdk==3.6.2
 transformers==4.57.6
-sentence-transformers==2.7.0
+sentence-transformers==6.3.0
 huggingface_hub==0.36.2
 numpy==2.2.6
 requests==2.34.2
