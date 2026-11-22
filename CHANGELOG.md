@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — 1.0.0, first public release
+## [1.0.0] — 2026-11-22: first public release
 
 ### Added
 - `scripts/setup.sh`: one-command setup that generates every secret and password and downloads the pre-trained model.
