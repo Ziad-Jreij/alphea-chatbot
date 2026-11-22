@@ -1,3 +1,3 @@
 # Tests and lint. Install on top of actions.txt + dashboard.txt (+ torch).
-pytest==9.0.3
-ruff==0.17.5
+pytest==9.2.0
+ruff==0.17.6
