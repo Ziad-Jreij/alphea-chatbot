@@ -1,6 +1,6 @@
 # Criticality benchmark — labelled customer-service messages.
 #
-# Used by eval_criticality.py. Not training data: nothing here is seen by the
+# Used by scripts/eval_criticality.py. Not training data: nothing here is seen by the
 # model or the guardrails during development, so keep it that way (don't copy
 # these sentences into nlu.yml or criticality_keywords.yml).
 #

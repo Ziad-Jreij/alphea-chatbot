@@ -434,7 +434,7 @@ _CRIT_HYPOTHESIS = "This support request is {}."
 CRITICALITY_STRATEGY = os.environ.get("CRITICALITY_STRATEGY", "risk")
 
 # Tuned on the dev split of data/eval/criticality_benchmark.yml (2026-10);
-# see eval_criticality.py for the numbers. Edit together with the benchmark.
+# see scripts/eval_criticality.py for the numbers. Edit together with the benchmark.
 RISK_HYPOTHESIS = "This message reports {}."
 RISK_CATEGORIES: Dict[str, List[str]] = {
     "high": [

@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use Alphea in research or build on it, please cite it as below."
+title: "Alphea: an emotion- and risk-aware customer service chatbot"
+abstract: >-
+  A Rasa-based customer service chatbot that combines emotion detection,
+  zero-shot criticality scoring and aspect-based sentiment analysis to decide
+  when a conversation should be escalated to a human agent, with an agent
+  dashboard and automatically generated analytics datasets. Originally
+  developed as a university thesis project.
+type: software
+authors:
+  - given-names: Ziad
+    family-names: Jreij
+repository-code: "https://github.com/Ziad-Jreij/alphea-chatbot"
+license: MIT
+version: 1.0.0
+keywords:
+  - chatbot
+  - customer service
+  - rasa
+  - emotion detection
+  - aspect-based sentiment analysis
+  - zero-shot classification
+  - escalation

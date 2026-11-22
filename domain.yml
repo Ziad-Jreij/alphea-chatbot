@@ -9,7 +9,6 @@ intents:
   - reset_password
   - refund_policy
   - talk_to_human
-  - faq
   - report_damaged_product
   - nlu_fallback
   - urgent_contact
@@ -344,6 +343,18 @@ responses:
         - title: "Talk to a human"
           payload: "/talk_to_human"
 
+  utter_ack_mixed_feedback:
+    - text: >
+        Thanks for the honest feedback! I’m glad some of it is working well for you, and
+        sorry about the parts that aren’t. I’ve noted both. What would you like to do next?
+      buttons:
+        - title: "Report a damaged product"
+          payload: "/report_damaged_product"
+        - title: "Start a return / refund"
+          payload: "/start_return"
+        - title: "Talk to a human"
+          payload: "/talk_to_human"
+
   utter_show_empathy:
     - text: >
         I’m really sorry this has been frustrating. Your issue matters, and I’m here to help
@@ -474,21 +485,7 @@ responses:
         - title: "Talk to a human"
           payload: "/talk_to_human"
 
-  # FAQs (Retrieval Intents & Generic FAQ)
-  utter_faq:
-    - text: >
-        I can help you with shipping times, store hours, contact options, and our refund
-        policy. What would you like to know?
-      buttons:
-        - title: "Refund & return policy"
-          payload: "/refund_policy"
-        - title: "Shipping times"
-          payload: "/shipping_times"
-        - title: "Store & support hours"
-          payload: "/store_hours"
-        - title: "Contact channels"
-          payload: "/faq_contact_channels"
-
+  # FAQs
   utter_faq_refund_window:
     - text: >
         Our standard refund and return period is 14 days from the delivery date, as long

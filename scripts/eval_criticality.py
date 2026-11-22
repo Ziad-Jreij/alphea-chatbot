@@ -15,12 +15,12 @@ Splits: tune on --split dev; report --split holdout only for final numbers.
 
 Usage (inside the rasa-actions image, models cached in the hf_cache volume):
     docker compose run --rm --no-deps -v "$PWD":/app -w /app rasa-actions \\
-        python eval_criticality.py --json results/criticality.json
+        python scripts/eval_criticality.py --json results/criticality.json
 
-    python eval_criticality.py --models deberta-base --modes pipeline --show-errors
-    python eval_criticality.py --strategies risk urgency  # compare strategies
-    python eval_criticality.py --split holdout            # final reporting only
-    python eval_criticality.py --source thesis            # original 40 cases only
+    python scripts/eval_criticality.py --models deberta-base --modes pipeline --show-errors
+    python scripts/eval_criticality.py --strategies risk urgency  # compare strategies
+    python scripts/eval_criticality.py --split holdout            # final reporting only
+    python scripts/eval_criticality.py --source thesis            # original 40 cases only
 """
 
 import argparse
@@ -30,9 +30,13 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
+import sys
+
 import yaml
 
-BENCHMARK = Path(__file__).resolve().parent / "data" / "eval" / "criticality_benchmark.yml"
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))  # so `components` imports when run as scripts/eval_criticality.py
+BENCHMARK = ROOT / "data" / "eval" / "criticality_benchmark.yml"
 CLASSES = ["low", "medium", "high"]
 
 MODELS = {

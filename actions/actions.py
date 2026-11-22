@@ -137,6 +137,7 @@ def _build_absa_insights(rows: list) -> Dict[str, Any]:
 ABSA_ENABLED_INTENTS = {
     "product_feedback_positive",
     "product_feedback_negative",
+    "product_feedback_mixed",
     "report_damaged_product",
     "start_return",
     "cancel_order",

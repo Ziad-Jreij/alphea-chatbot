@@ -58,11 +58,6 @@ rules:
     - action: utter_faq_contact_channels
     - action: utter_ask_conversation_feedback
 
-- rule: Handle generic FAQ intent
-  steps:
-    - intent: faq
-    - action: utter_faq
-
 # --- Handoff Rules ---
 
 - rule: Human handoff
@@ -553,6 +548,15 @@ rules:
     - action: action_update_conversation_risk
     - action: action_push_state_to_dashboard
     - action: utter_ack_negative_feedback
+    - action: utter_welcome_menu
+- rule: Mixed product feedback
+  steps:
+    - intent: product_feedback_mixed
+    - action: action_set_primary_intent
+    - action: action_infer_emotion
+    - action: action_update_conversation_risk
+    - action: action_push_state_to_dashboard
+    - action: utter_ack_mixed_feedback
     - action: utter_welcome_menu
 - rule: Handle out of scope (general)
   steps:
