@@ -43,7 +43,7 @@ Most support bots stop at intent recognition or a single sentiment score. Alphea
 - **Criticality independent of emotion.** "I think someone stole my credit card" is emotionally calm but highly critical. Seven risk categories (safety, injury, fraud, account takeover, privacy, medical, legal) are scored independently on every message.
 - **Explainable escalation.** Every decision comes with a reason code and a one-sentence explanation an agent can read.
 - **Fine-grained emotion** (GoEmotions) smoothed over the conversation, so one ambiguous message doesn't flip the reading.
-- **Aspect-level sentiment.** "Love the design, but the battery is awful" is split into what customers like and what they complain about.
+- **Aspect-level sentiment.** "Love the design, but the battery is awful" is broken down by aspect, so managers see which parts of the product draw complaints.
 - **A real-time agent dashboard** with a manager overview, live session monitoring and CSV export.
 - **Measured.** A 334-case benchmark with a held-out split, unit tests, recorded dialogue tests and CI.
 
@@ -101,7 +101,7 @@ Open the chat and type:
 | `I want to return an item` | Runs the return form with order-ID validation |
 | `someone used my credit card without permission` | **Fraud** risk category goes HIGH, and the chat is handed to a human with an explanation |
 | `my charger started sparking and smoking` | **Safety hazard**: escalates even though the tone is calm |
-| `I love the design but the battery is awful` | ABSA records a positive *design* aspect and a negative *battery* aspect |
+| `I love the design but the battery is awful` | ABSA picks out the *battery* complaint (negative, "awful") and the *design* aspect, and it shows up under Top Customer Complaints |
 | `this is the fourth time I'm writing about this` | Repeated-contact rule raises criticality |
 
 Then open the dashboard to see each conversation's emotion, criticality, escalation reason and aspects, and the manager overview aggregating them.
@@ -313,6 +313,7 @@ Build from your working tree with `docker compose up -d --build`. See [CONTRIBUT
 
 - **English only.** There is a single tenant, one bot and one dashboard admin account.
 - Escalation recall on the holdout set is 73%, so some urgent messages are missed (see [Benchmark](#benchmark-and-performance)).
+- ABSA pairs opinions that come after an aspect better than ones before it: in "I love the design", *design* is detected but scored neutral.
 - Safety reports are sometimes classified as `nlu_fallback` and escalate through the dialogue policy rather than a dedicated rule.
 - Pinned to Rasa Open Source 3.6, which requires Python 3.10.
 

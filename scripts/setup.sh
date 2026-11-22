@@ -70,7 +70,7 @@ if [ "$FETCH_MODEL" = 1 ]; then
     else
       rm -f models/alphea-model.tar.gz.part
       echo
-      echo "No pre-trained model could be downloaded. Train one instead (about 10-20 min on CPU):"
+      echo "No pre-trained model could be downloaded. Train one instead (2-20 min depending on CPU):"
       echo "  docker compose run --rm --no-deps --user \"\$(id -u):0\" rasa train"
     fi
   fi
