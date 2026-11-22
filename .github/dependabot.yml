@@ -16,6 +16,9 @@ updates:
       # rasa-sdk must match the Rasa 3.6 server in docker/Dockerfile.rasa
       - dependency-name: rasa-sdk
         update-types: [version-update:semver-minor, version-update:semver-major]
+      # numpy 2.3+ needs Python 3.11; the stack is on Python 3.10 (Rasa 3.6)
+      - dependency-name: numpy
+        update-types: [version-update:semver-minor, version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /

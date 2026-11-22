@@ -94,5 +94,5 @@ if ! ls models/*.tar.gz >/dev/null 2>&1; then
   echo "  docker compose run --rm --no-deps --user \"\$(id -u):0\" rasa train"
 fi
 echo "  docker compose up -d      # first start downloads ~700 MB of AI models"
-echo "  open http://localhost:5001/webchat.html   (chat)"
+echo "  open http://localhost:5001/shop.html      (demo shop with the chat assistant)"
 echo "  open http://localhost:5001                (agent dashboard)"
