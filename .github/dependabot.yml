@@ -9,6 +9,10 @@ updates:
       python-minor-and-patch:
         update-types: [minor, patch]
     ignore:
+      # Major versions (transformers 5, sentence-transformers 3+, ...) need a
+      # deliberate upgrade and a benchmark re-run, not a bot PR.
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
       # rasa-sdk must match the Rasa 3.6 server in docker/Dockerfile.rasa
       - dependency-name: rasa-sdk
         update-types: [version-update:semver-minor, version-update:semver-major]
