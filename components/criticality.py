@@ -459,6 +459,10 @@ RISK_CATEGORIES: Dict[str, List[str]] = {
         "a general question or information request",
         "a compliment or a thank you",
         "a routine request to change an order or account",
+        # Without this, plain return/cancel requests ("I want to return an item")
+        # matched "a billing, refund or payment problem" and scored MEDIUM.
+        # Dev: 83.2% -> 86.5% accuracy, HIGH precision/recall unchanged (v1.0.2).
+        "a simple request to start a return or cancel an order",
     ],
 }
 RISK_HIGH_THRESHOLD = 0.70   # strongest risk category (after emotion prior) ≥ this → high

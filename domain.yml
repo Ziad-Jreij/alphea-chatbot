@@ -84,6 +84,10 @@ slots:
     type: text
     influence_conversation: false
     mappings: [{ type: custom }]
+  emotion_smoothing_reason:
+    type: text
+    influence_conversation: false
+    mappings: [{ type: custom }]
   emotion_tally:
     type: any        
     influence_conversation: false

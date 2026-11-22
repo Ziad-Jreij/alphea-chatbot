@@ -182,7 +182,7 @@ Holdout results, production pipeline, CPU:
 
 Known misses on the holdout include a broken carbon-monoxide detector, a gas smell after an installation, a phishing request for a card PIN and a chargeback threat. **Treat escalation as decision support for agents, not as a safety system.**
 
-Caveats: the holdout set was scored a second time after one category was reworded in response to a *live-testing* failure (plain return requests were being escalated), not a holdout error. 290 of the 334 labels were drafted in October 2026 and are marked `source: draft` pending human review. On the original 40-message thesis set, the original urgency strategy scores 60% raw, matching the thesis result.
+Caveats: the holdout set has been re-scored after two category changes, both made in response to *live-testing* failures, not holdout errors: plain return requests were being escalated (October 2026), and then scored medium instead of low (v1.0.2, which left the holdout numbers unchanged). 290 of the 334 labels were drafted in October 2026 and are marked `source: draft` pending human review. On the original 40-message thesis set, the original urgency strategy scores 60% raw, matching the thesis result.
 
 Reproduce it (use the dev split for tuning and the holdout split for reporting):
 
