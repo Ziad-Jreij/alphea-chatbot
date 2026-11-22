@@ -5,6 +5,6 @@ Flask-Limiter[redis]==3.12
 SQLAlchemy==2.0.55
 psycopg2-binary==2.9.13
 PyJWT==2.10.1
-structlog==23.3.0
+structlog==26.1.0
 prometheus_client==0.20.0
 gunicorn==21.2.0
