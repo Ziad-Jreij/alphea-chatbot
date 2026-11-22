@@ -773,7 +773,7 @@
             <div class="example">Try: <code>I think my account was hacked and money is missing.</code></div>
           </div>
           <div style="margin-top:10px;color:#94a3b8;font-size:12px;line-height:1.4;">
-            Demo disclaimer: No real banking actions are performed. The chatbot is for thesis demonstration only.
+            Demo disclaimer: No real banking actions are performed. The chatbot is for demonstration only.
           </div>
         </div>
       </section>
@@ -781,8 +781,7 @@
   </main>
 
   <footer>
-    HeliosCY Bank (Demo) · This page is a visual mockup for a thesis demo. It does not process real payments, logins, or banking actions.
-    Use only with a local Rasa server running on <strong>127.0.0.1:5005</strong>.
+    HeliosCY Bank (Demo) · This page is a visual mockup. It does not process real payments, logins, or banking actions.
   </footer>
 
   <!-- Chatbot container -->
@@ -800,7 +799,7 @@
         {
           selector: "#webchat",
           initPayload: "/greet",
-          socketUrl: "http://127.0.0.1:5005",
+          socketUrl: window.__RASA_URL__ || (window.location.protocol + "//" + window.location.hostname + ":5005"),
           socketPath: "/socket.io/",
           title: "Aletheia 🤖",
           subtitle: "HeliosCY Support",

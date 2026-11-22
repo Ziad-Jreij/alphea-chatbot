@@ -136,7 +136,8 @@
   </div>
 
   <script>
-    const API_BASE = "http://localhost:5001";
+    // Same origin as the page: the dashboard serves both the HTML and the API.
+    const API_BASE = "";
 
     // If already logged in, skip the login page
     if (localStorage.getItem("authToken")) {

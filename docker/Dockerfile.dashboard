@@ -7,7 +7,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY dashboard/app.py ./app.py
 COPY dashboard/dashboard.html dashboard/login.html ./
-COPY webchat/webchat.html ./
+COPY webchat/*.html ./
 COPY observability/ ./observability/
 
 EXPOSE 5001

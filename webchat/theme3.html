@@ -816,7 +816,7 @@
   </main>
 
   <footer>
-    <span>Nexus (Demo) · Visual mockup for thesis presentation. No real data stored or transmitted.</span>
+    <span>Nexus (Demo) · Visual mockup. No real data stored or transmitted.</span>
     <span>Powered by Alphea AI · Rasa 3.x</span>
   </footer>
 
@@ -835,7 +835,7 @@
         {
           selector: "#webchat",
           initPayload: "/greet",
-          socketUrl: "http://127.0.0.1:5005",
+          socketUrl: window.__RASA_URL__ || (window.location.protocol + "//" + window.location.hostname + ":5005"),
           socketPath: "/socket.io/",
           title: "Alphea 🤖",
           subtitle: "Nexus AI Support",

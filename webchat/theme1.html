@@ -702,7 +702,7 @@
           it analyses emotions, detects critical cases and escalates when needed.
         </p>
         <small>
-          For your thesis demo, you can say things like:
+          Try saying things like:
           “I’m really angry, my product arrived damaged” or
           “I think someone stole my credit card”.
         </small>
@@ -716,7 +716,7 @@
   </main>
 
   <footer>
-    Alphea Shop – Demo environment for thesis project. No real orders or payments are processed.
+    Alphea Shop – Demo storefront. No real orders or payments are processed.
   </footer>
 
   <!-- Chatbot container -->
@@ -734,7 +734,7 @@
         {
           selector: "#webchat",
           initPayload: "/greet",
-          socketUrl: "http://127.0.0.1:5005",
+          socketUrl: window.__RASA_URL__ || (window.location.protocol + "//" + window.location.hostname + ":5005"),
           socketPath: "/socket.io/",
           title: "Alphea 🤖",
           subtitle: "Customer Service Chatbot",

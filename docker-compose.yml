@@ -30,6 +30,9 @@ services:
 
   # ── Dashboard (Flask) ───────────────────────────────────────────────────────
   dashboard:
+    # Pre-built image from the latest release (docker compose pull); falls back
+    # to building docker/Dockerfile.dashboard locally when the image isn't available.
+    image: ghcr.io/ziad-jreij/alphea-dashboard:${ALPHEA_VERSION:-latest}
     build:
       context: .
       dockerfile: docker/Dockerfile.dashboard
@@ -54,6 +57,9 @@ services:
 
   # ── Rasa Action Server ──────────────────────────────────────────────────────
   rasa-actions:
+    # Pre-built image from the latest release (docker compose pull); falls back
+    # to building docker/Dockerfile.actions locally when the image isn't available.
+    image: ghcr.io/ziad-jreij/alphea-actions:${ALPHEA_VERSION:-latest}
     build:
       context: .
       dockerfile: docker/Dockerfile.actions
@@ -103,6 +109,9 @@ services:
 
   # ── Rasa Dialog Server ──────────────────────────────────────────────────────
   rasa:
+    # Pre-built image from the latest release (docker compose pull); falls back
+    # to building docker/Dockerfile.rasa locally when the image isn't available.
+    image: ghcr.io/ziad-jreij/alphea-rasa:${ALPHEA_VERSION:-latest}
     build:
       context: .
       dockerfile: docker/Dockerfile.rasa

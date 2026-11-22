@@ -780,7 +780,8 @@
   </div>
 
   <script>
-    const API_BASE = "http://localhost:5001";
+    // Same origin as the page: the dashboard serves both the HTML and the API.
+    const API_BASE = "";
 
     const _token       = () => localStorage.getItem("authToken") || "";
     const _authHeaders = () => ({ "Authorization": "Bearer " + _token(), "Content-Type": "application/json" });
