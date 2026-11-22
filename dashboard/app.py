@@ -162,8 +162,8 @@ def require_auth(f):
             return jsonify({"error": "missing token"}), 401
         try:
             jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-        except jwt.InvalidTokenError as exc:
-            return jsonify({"error": "invalid or expired token", "detail": str(exc)}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "invalid or expired token"}), 401
         return f(*args, **kwargs)
     return decorated
 
